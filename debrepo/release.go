@@ -9,15 +9,15 @@ import (
 	"time"
 )
 
-// Time 是 deb822 中的时间戳，例如 Release 文件的
-// "Date: Sat, 11 Jul 2026 09:02:23 UTC"。
+// Time is a timestamp from deb822, for example the Release file's
+// "Date: Sat, 11 Jul 2026 09:02:23 UTC".
 type Time struct {
-	// Raw 是原始字符串。
+	// Raw is the original string.
 	Raw   string
 	value time.Time
 }
 
-// timeLayouts 是 Release 文件中出现过的几种时间格式。
+// timeLayouts holds the several time formats seen in Release files.
 var timeLayouts = []string{
 	time.RFC1123,
 	time.RFC1123Z,
@@ -28,7 +28,7 @@ var timeLayouts = []string{
 	"Mon, 2 Jan 2006 15:04:05 -0700",
 }
 
-// ParseTime 解析 Release 文件中的时间戳，空字符串返回零值。
+// ParseTime parses the timestamp in a Release file; an empty string returns the zero value.
 func ParseTime(raw string) (Time, error) {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
@@ -39,22 +39,22 @@ func ParseTime(raw string) (Time, error) {
 			return Time{Raw: raw, value: value}, nil
 		}
 	}
-	return Time{}, fmt.Errorf("debrepo: 非法的时间戳 %q", raw)
+	return Time{}, fmt.Errorf("debrepo: invalid timestamp %q", raw)
 }
 
-// Time 返回 time.Time，为空时返回零时间。
+// Time returns the time.Time, or the zero time when it is empty.
 func (t Time) Time() time.Time { return t.value }
 
-// IsZero 判断时间戳是否为空。
+// IsZero reports whether the timestamp is empty.
 func (t Time) IsZero() bool { return t.value.IsZero() }
 
-// IsSet 判断时间戳是否已解析。
+// IsSet reports whether the timestamp has been parsed.
 func (t Time) IsSet() bool { return !t.value.IsZero() }
 
-// After 判断时间戳是否晚于 other（为空时返回 false）。
+// After reports whether the timestamp is later than other (false when it is empty).
 func (t Time) After(other time.Time) bool { return !t.value.IsZero() && t.value.After(other) }
 
-// String 返回 RFC3339 格式（UTC）的时间，为空时返回空字符串。
+// String returns the time in RFC3339 format (UTC), or an empty string when it is empty.
 func (t Time) String() string {
 	if t.value.IsZero() {
 		return ""
@@ -62,7 +62,7 @@ func (t Time) String() string {
 	return t.value.UTC().Format(time.RFC3339)
 }
 
-// Format 按 layout 格式化时间，为空时返回空字符串。
+// Format formats the time with layout, or returns an empty string when it is empty.
 func (t Time) Format(layout string) string {
 	if t.value.IsZero() {
 		return ""
@@ -70,7 +70,7 @@ func (t Time) Format(layout string) string {
 	return t.value.Format(layout)
 }
 
-// MarshalJSON 输出为 RFC3339 字符串，零值输出 null。
+// MarshalJSON renders the time as an RFC3339 string, and a zero value as null.
 func (t Time) MarshalJSON() ([]byte, error) {
 	if t.value.IsZero() {
 		return []byte("null"), nil
@@ -78,7 +78,7 @@ func (t Time) MarshalJSON() ([]byte, error) {
 	return json.Marshal(t.String())
 }
 
-// UnmarshalJSON 解析 RFC3339 字符串或 Release 风格的时间戳。
+// UnmarshalJSON parses an RFC3339 string or a Release-style timestamp.
 func (t *Time) UnmarshalJSON(data []byte) error {
 	var raw string
 	if err := json.Unmarshal(data, &raw); err != nil {
@@ -92,39 +92,41 @@ func (t *Time) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// FileEntry 是 Release 校验值分节中的一行，描述索引文件的大小与摘要；
-// Sources 索引也用同样的结构描述源码包中的各个文件。
+// FileEntry is one line of a Release checksum section, describing the size and digest of an index
+// file; the Sources index uses the same structure to describe the files inside a source package.
 type FileEntry struct {
-	// Path 是相对仓库根（Release）或源码包目录（Sources）的路径。
+	// Path is the path relative to the repository root (Release) or to the source package directory
+	// (Sources).
 	Path string `json:"path"`
-	// Size 是文件大小（字节）。
+	// Size is the file size in bytes.
 	Size int64 `json:"size"`
-	// Checksum 是文件的摘要。
+	// Checksum is the digest of the file.
 	Checksum Checksum `json:"checksum"`
 }
 
-// Release 是 dists/<suite>/Release（或 InRelease）的解析结果：
-// 仓库的发行信息与全部索引文件的校验值。
+// Release is the parse result of dists/<suite>/Release (or InRelease): the distribution information
+// of the repository plus the checksums of every index file.
 type Release struct {
-	// Origin、Label 是仓库来源。
+	// Origin and Label describe the origin of the repository.
 	Origin string `json:"origin,omitempty"`
 	Label  string `json:"label,omitempty"`
-	// Suite 是套件名（stable、testing），Codename 是代号（bookworm、trixie）。
+	// Suite is the suite name (stable, testing) and Codename is the codename (bookworm, trixie).
 	Suite    string `json:"suite,omitempty"`
 	Codename string `json:"codename,omitempty"`
-	// Version 是发行版版本号，例如 "13.6"。
+	// Version is the distribution version number, for example "13.6".
 	Version string `json:"version,omitempty"`
-	// Description 是发行说明。
+	// Description is the release description.
 	Description string `json:"description,omitempty"`
-	// Date 是生成时间，ValidUntil 是过期时间（可能为空）。
+	// Date is the creation time and ValidUntil is the expiry time (which may be empty).
 	Date       Time `json:"date,omitempty"`
 	ValidUntil Time `json:"valid_until,omitempty"`
-	// AcquireByHash 表示仓库支持 by-hash 方式获取索引（仓库更新时的原子性保障）。
+	// AcquireByHash indicates that the repository supports fetching indexes by hash (which keeps
+	// repository updates atomic).
 	AcquireByHash bool `json:"acquire_by_hash,omitempty"`
-	// NotAutomatic、ButAutomaticUpgrades 是第三方仓库的 apt 行为标记。
+	// NotAutomatic and ButAutomaticUpgrades are the apt behavior flags of a third-party repository.
 	NotAutomatic         bool `json:"not_automatic,omitempty"`
 	ButAutomaticUpgrades bool `json:"but_automatic_upgrades,omitempty"`
-	// Architectures、Components 是仓库提供的架构与组件列表。
+	// Architectures and Components are the architectures and components the repository provides.
 	Architectures []string `json:"architectures,omitempty"`
 	Components    []string `json:"components,omitempty"`
 
@@ -135,7 +137,7 @@ type Release struct {
 	byAlgo  map[string]map[string]FileEntry
 }
 
-// checksumSections 是 Release 文件中的校验值分节名称。
+// checksumSections holds the names of the checksum sections in a Release file.
 var checksumSections = map[string]string{
 	"md5sum": "md5",
 	"sha1":   "sha1",
@@ -143,11 +145,12 @@ var checksumSections = map[string]string{
 	"sha512": "sha512",
 }
 
-// ParseRelease 解析 Release 或 InRelease 的内容（InRelease 的 PGP 签名会被自动剥离）。
+// ParseRelease parses the content of Release or InRelease (the PGP signature of InRelease is stripped
+// automatically).
 func ParseRelease(r io.Reader) (*Release, error) {
 	data, err := io.ReadAll(r)
 	if err != nil {
-		return nil, fmt.Errorf("debrepo: 读取 Release 失败: %w", err)
+		return nil, fmt.Errorf("debrepo: reading Release failed: %w", err)
 	}
 	cleared := ClearPGPArmor(data)
 	var first *Stanza
@@ -162,7 +165,7 @@ func ParseRelease(r io.Reader) (*Release, error) {
 		return nil, err
 	}
 	if first == nil || first.Len() == 0 {
-		return nil, fmt.Errorf("%w: Release 文件为空", ErrNotRepository)
+		return nil, fmt.Errorf("%w: the Release file is empty", ErrNotRepository)
 	}
 	return parseReleaseStanza(first)
 }
@@ -221,8 +224,8 @@ func parseReleaseStanza(stanza *Stanza) (*Release, error) {
 	return release, nil
 }
 
-// ParseFileEntries 解析校验值分节或 Sources 的 Files/Checksums-* 字段：
-// 每行是 "摘要 大小 文件名"。
+// ParseFileEntries parses a checksum section or the Files/Checksums-* fields of Sources: every line
+// is "digest size file name".
 func ParseFileEntries(value, algo string) ([]FileEntry, error) {
 	var entries []FileEntry
 	for _, line := range strings.Split(value, "\n") {
@@ -231,12 +234,12 @@ func ParseFileEntries(value, algo string) ([]FileEntry, error) {
 			continue
 		}
 		if len(fields) != 3 {
-			return nil, fmt.Errorf("%w: %s 分节中的 %q 应为 \"摘要 大小 路径\"",
-				ErrInvalidControl, algo, strings.TrimSpace(line))
+			return nil, fmt.Errorf("%w: %q in the %s section should be \"digest size path\"",
+				ErrInvalidControl, strings.TrimSpace(line), algo)
 		}
 		size, err := strconv.ParseInt(fields[1], 10, 64)
 		if err != nil {
-			return nil, fmt.Errorf("%w: %s 分节中的大小 %q 非法", ErrInvalidControl, algo, fields[1])
+			return nil, fmt.Errorf("%w: invalid size %q in the %s section", ErrInvalidControl, fields[1], algo)
 		}
 		entries = append(entries, FileEntry{
 			Path:     fields[2],
@@ -247,7 +250,7 @@ func ParseFileEntries(value, algo string) ([]FileEntry, error) {
 	return entries, nil
 }
 
-// Field 返回 Release 文件中的原始字段值，字段名不区分大小写。
+// Field returns the raw field value from the Release file; the field name is case-insensitive.
 func (r *Release) Field(name string) string {
 	if r == nil || r.stanza == nil {
 		return ""
@@ -255,7 +258,7 @@ func (r *Release) Field(name string) string {
 	return r.stanza.Get(name)
 }
 
-// FieldNames 返回 Release 文件中出现的字段名（按原顺序）。
+// FieldNames returns the field names that appear in the Release file (in their original order).
 func (r *Release) FieldNames() []string {
 	if r == nil || r.stanza == nil {
 		return nil
@@ -263,7 +266,7 @@ func (r *Release) FieldNames() []string {
 	return r.stanza.Names()
 }
 
-// FieldsMap 返回 Release 文件中的全部字段（键为小写字段名）。
+// FieldsMap returns every field in the Release file (keyed by lower-case field name).
 func (r *Release) FieldsMap() map[string]string {
 	if r == nil || r.stanza == nil {
 		return nil
@@ -275,7 +278,7 @@ func (r *Release) FieldsMap() map[string]string {
 	return fields
 }
 
-// MarshalJSON 输出解析后的字段，并附带 Release 文件中的原始字段。
+// MarshalJSON renders the parsed fields together with the raw fields from the Release file.
 func (r *Release) MarshalJSON() ([]byte, error) {
 	if r == nil {
 		return []byte("null"), nil
@@ -287,7 +290,8 @@ func (r *Release) MarshalJSON() ([]byte, error) {
 	}{(*alias)(r), r.FieldsMap()})
 }
 
-// Files 返回 Release 中记录的全部文件条目（按文件出现顺序，含各校验算法）。
+// Files returns every file entry recorded in the Release file (in order of appearance, including
+// each checksum algorithm).
 func (r *Release) Files() []FileEntry {
 	if r == nil {
 		return nil
@@ -297,9 +301,10 @@ func (r *Release) Files() []FileEntry {
 	return entries
 }
 
-// FilesByStrength 按路径去重后返回文件条目：每个路径只保留最强算法
-// （sha512 > sha256 > sha1 > md5）的那一条，顺序与文件首次出现的顺序一致。
-// 展示仓库的索引清单时通常用这个方法，避免同一路径重复出现四次。
+// FilesByStrength returns the file entries deduplicated by path: only the entry with the strongest
+// algorithm (sha512 > sha256 > sha1 > md5) is kept for each path, in the order the files first
+// appear. This is usually the method to use when displaying the repository's index list, since it
+// keeps the same path from appearing four times.
 func (r *Release) FilesByStrength() []FileEntry {
 	if r == nil {
 		return nil
@@ -313,7 +318,8 @@ func (r *Release) FilesByStrength() []FileEntry {
 	return entries
 }
 
-// Lookup 按路径返回最强算法（sha512 > sha256 > sha1 > md5）对应的文件条目。
+// Lookup returns the file entry with the strongest algorithm (sha512 > sha256 > sha1 > md5) for a
+// path.
 func (r *Release) Lookup(path string) (FileEntry, bool) {
 	if r == nil {
 		return FileEntry{}, false
@@ -322,7 +328,7 @@ func (r *Release) Lookup(path string) (FileEntry, bool) {
 	return entry, ok
 }
 
-// LookupAlgorithm 按路径与算法返回文件条目。
+// LookupAlgorithm returns the file entry for a path and algorithm.
 func (r *Release) LookupAlgorithm(path, algo string) (FileEntry, bool) {
 	if r == nil {
 		return FileEntry{}, false
@@ -339,21 +345,23 @@ func (r *Release) LookupAlgorithm(path, algo string) (FileEntry, bool) {
 	return entry, ok
 }
 
-// Has 判断 Release 中是否记录了指定路径（即索引是否真实存在）。
+// Has reports whether the Release file records the given path (that is, whether the index really
+// exists).
 func (r *Release) Has(path string) bool {
 	_, ok := r.Lookup(path)
 	return ok
 }
 
-// Expired 判断仓库是否已超过 Valid-Until（未设置 Valid-Until 时永远返回 false）。
+// Expired reports whether the repository is past Valid-Until (always false when Valid-Until is not
+// set).
 func (r *Release) Expired(now time.Time) bool {
 	return r != nil && r.ValidUntil.IsSet() && now.After(r.ValidUntil.Time())
 }
 
-// ClearPGPArmor 剥离 InRelease 的明文签名包裹，返回签名保护的正文；
-// 输入不是 PGP 明文签名时原样返回。
+// ClearPGPArmor strips the cleartext signature wrapper from InRelease and returns the body protected
+// by the signature; when the input is not a PGP cleartext signature it is returned unchanged.
 //
-// InRelease 的格式（RFC 4880 cleartext signature framework）：
+// The InRelease format (RFC 4880 cleartext signature framework):
 //
 //	-----BEGIN PGP SIGNED MESSAGE-----
 //	Hash: SHA256
@@ -372,17 +380,17 @@ func ClearPGPArmor(data []byte) []byte {
 	}
 	body := trimmed[len(begin):]
 	body = strings.TrimLeft(body, "\r\n")
-	// 跳过 "Hash: SHA256" 等头部，直到第一个空行。
+	// Skip headers such as "Hash: SHA256" up to the first blank line.
 	if idx := strings.Index(body, "\r\n\r\n"); idx >= 0 {
 		body = body[idx+4:]
 	} else if idx := strings.Index(body, "\n\n"); idx >= 0 {
 		body = body[idx+2:]
 	}
-	// 截断签名部分。
+	// Cut off the signature part.
 	if idx := strings.Index(body, "-----BEGIN PGP SIGNATURE-----"); idx >= 0 {
 		body = body[:idx]
 	}
-	// 去掉 dash-escape（"- " 前缀）。
+	// Remove the dash escape (the "- " prefix).
 	var sb strings.Builder
 	for _, line := range strings.Split(body, "\n") {
 		line = strings.TrimSuffix(line, "\r")
@@ -395,7 +403,7 @@ func ClearPGPArmor(data []byte) []byte {
 	return []byte(sb.String())
 }
 
-// parseYesNo 解析 Debian 的布尔写法：yes/no、true/false、1/0。
+// parseYesNo parses the Debian boolean spellings: yes/no, true/false, and 1/0.
 func parseYesNo(raw string) bool {
 	switch strings.ToLower(strings.TrimSpace(raw)) {
 	case "yes", "true", "1", "y":

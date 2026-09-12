@@ -2,8 +2,8 @@ package rpmrepo
 
 import "testing"
 
-// TestCompareVersions 使用 rpm 官方 tests/rpmvercmp.at 中的全部用例，
-// 保证版本比较行为与 rpm/dnf 完全一致。
+// TestCompareVersions uses every case from the upstream rpm tests/rpmvercmp.at, ensuring that the
+// version comparison behaves exactly like rpm/dnf.
 func TestCompareVersions(t *testing.T) {
 	cases := []struct {
 		a, b string
@@ -104,11 +104,12 @@ func TestCompareVersions(t *testing.T) {
 
 	for _, tc := range cases {
 		if got := CompareVersions(tc.a, tc.b); got != tc.want {
-			t.Errorf("CompareVersions(%q, %q) = %d, 期望 %d", tc.a, tc.b, got, tc.want)
+			t.Errorf("CompareVersions(%q, %q) = %d, want %d", tc.a, tc.b, got, tc.want)
 		}
-		// 交换参数后结果应当取反，保证比较是反对称的。
+		// Swapping the arguments must negate the result, which guarantees the comparison is
+		// antisymmetric.
 		if got := CompareVersions(tc.b, tc.a); got != -tc.want {
-			t.Errorf("CompareVersions(%q, %q) = %d, 期望 %d", tc.b, tc.a, got, -tc.want)
+			t.Errorf("CompareVersions(%q, %q) = %d, want %d", tc.b, tc.a, got, -tc.want)
 		}
 	}
 }
@@ -124,7 +125,7 @@ func TestEVRString(t *testing.T) {
 	}
 	for _, tc := range cases {
 		if got := tc.evr.String(); got != tc.want {
-			t.Errorf("EVR.String() = %q, 期望 %q", got, tc.want)
+			t.Errorf("EVR.String() = %q, want %q", got, tc.want)
 		}
 	}
 }
@@ -140,7 +141,7 @@ func TestEVRCompare(t *testing.T) {
 	}
 	for _, tc := range cases {
 		if got := tc.a.Compare(tc.b); got != tc.want {
-			t.Errorf("%v.Compare(%v) = %d, 期望 %d", tc.a, tc.b, got, tc.want)
+			t.Errorf("%v.Compare(%v) = %d, want %d", tc.a, tc.b, got, tc.want)
 		}
 	}
 }
@@ -156,13 +157,13 @@ func TestDependencyString(t *testing.T) {
 	}
 	for _, tc := range cases {
 		if got := tc.dep.String(); got != tc.want {
-			t.Errorf("Dependency.String() = %q, 期望 %q", got, tc.want)
+			t.Errorf("Dependency.String() = %q, want %q", got, tc.want)
 		}
 	}
 	if !(Dependency{Name: "x", Flags: "EQ", Version: "1"}).IsVersioned() {
-		t.Error("带版本的依赖应当判定为 IsVersioned")
+		t.Error("a versioned dependency should be reported as IsVersioned")
 	}
 	if (Dependency{Name: "x"}).IsVersioned() {
-		t.Error("不带版本的依赖不应该判定为 IsVersioned")
+		t.Error("a dependency without a version should not be reported as IsVersioned")
 	}
 }

@@ -6,11 +6,13 @@ import (
 	"time"
 )
 
-// defaultTimeout 是默认的 HTTP 超时，避免长时间卡在无响应的镜像上。
+// defaultTimeout is the default HTTP timeout, which avoids hanging for a long time on an
+// unresponsive mirror.
 const defaultTimeout = 2 * time.Minute
 
-// Client 是 RPM 仓库客户端，可复用于多个仓库与多次查询。
-// 也可以使用包级函数 Open/ListPackages/FindPackages，它们使用默认配置的客户端。
+// Client is an RPM repository client; it can be reused across repositories and queries.
+// The package-level functions Open/ListPackages/FindPackages can be used instead; they use a client
+// with the default configuration.
 type Client struct {
 	httpClient *http.Client
 	userAgent  string
@@ -19,10 +21,10 @@ type Client struct {
 	verify     bool
 }
 
-// Option 用于配置 Client。
+// Option configures a Client.
 type Option func(*Client)
 
-// New 创建一个仓库客户端。
+// New creates a repository client.
 func New(opts ...Option) *Client {
 	client := &Client{}
 	for _, opt := range opts {
@@ -33,35 +35,37 @@ func New(opts ...Option) *Client {
 	return client
 }
 
-// WithHTTPClient 使用自定义的 HTTP 客户端（例如带代理、重试、超时控制）。
+// WithHTTPClient uses a custom HTTP client (for example one with a proxy, retries, or timeout
+// control).
 func WithHTTPClient(httpClient *http.Client) Option {
 	return func(c *Client) { c.httpClient = httpClient }
 }
 
-// WithUserAgent 设置请求头中的 User-Agent。
+// WithUserAgent sets the User-Agent request header.
 func WithUserAgent(userAgent string) Option {
 	return func(c *Client) { c.userAgent = userAgent }
 }
 
-// WithTimeout 设置 HTTP 请求超时，未设置时默认 2 分钟。
+// WithTimeout sets the HTTP request timeout; the default is 2 minutes when unset.
 func WithTimeout(timeout time.Duration) Option {
 	return func(c *Client) { c.timeout = timeout }
 }
 
-// WithFetcher 替换默认的下载实现，可用于本地缓存、离线数据源或测试桩。
+// WithFetcher replaces the default download implementation; it can be used for a local cache, an
+// offline data source, or a test stub.
 func WithFetcher(fetcher Fetcher) Option {
 	return func(c *Client) { c.fetcher = fetcher }
 }
 
-// WithChecksumVerification 控制是否校验元数据校验和（默认关闭）。
+// WithChecksumVerification controls whether metadata checksums are verified (disabled by default).
 //
-// 开启后，每份 primary 元数据都会边解析边计算摘要，并与 repomd.xml 中记录的
-// open-checksum 比对，用于发现下载不完整或被篡改的元数据。
+// When enabled, the digest of every primary metadata is computed while it is parsed and compared
+// with the open-checksum recorded in repomd.xml, which detects incomplete or tampered metadata.
 func WithChecksumVerification(enable bool) Option {
 	return func(c *Client) { c.verify = enable }
 }
 
-// fetcherInstance 返回实际使用的下载实现。
+// fetcherInstance returns the download implementation actually in use.
 func (c *Client) fetcherInstance() Fetcher {
 	if c.fetcher != nil {
 		return c.fetcher
@@ -84,13 +88,13 @@ func (c *Client) fetcherInstance() Fetcher {
 	}
 }
 
-// ListPackages 读取仓库 repoURL 并返回名称匹配 name 的所有软件包。
-// name 支持通配符，例如 "nginx*"。
+// ListPackages reads the repository at repoURL and returns all packages whose name matches name.
+// name supports wildcards, for example "nginx*".
 func (c *Client) ListPackages(ctx context.Context, repoURL, name string) ([]Package, error) {
 	return c.FindPackages(ctx, repoURL, Query{Name: name})
 }
 
-// FindPackages 读取仓库 repoURL 并返回满足 q 的所有软件包。
+// FindPackages reads the repository at repoURL and returns all packages matching q.
 func (c *Client) FindPackages(ctx context.Context, repoURL string, q Query) ([]Package, error) {
 	repo, err := c.Open(ctx, repoURL)
 	if err != nil {
@@ -99,26 +103,28 @@ func (c *Client) FindPackages(ctx context.Context, repoURL string, q Query) ([]P
 	return repo.FindPackages(ctx, q)
 }
 
-// Open 读取并解析仓库元数据（repodata/repomd.xml）。
-// 同一个仓库需要多次查询时，先 Open 再复用返回的 Repository 可以少读一次 repomd.xml。
+// Open reads and parses the repository metadata (repodata/repomd.xml).
+// When the same repository is queried several times, calling Open first and reusing the returned
+// Repository saves a repeated read of repomd.xml.
 func Open(ctx context.Context, repoURL string, opts ...Option) (*Repository, error) {
 	return New(opts...).Open(ctx, repoURL)
 }
 
-// ListPackages 读取仓库 repoURL 并返回名称匹配 name 的软件包列表，
-// 包含下载链接、大小、指纹（校验和）与依赖等元数据。
+// ListPackages reads the repository at repoURL and returns the packages whose name matches name,
+// including metadata such as the download link, size, checksum, and dependencies.
 //
 //	pkgs, err := rpmrepo.ListPackages(ctx, "https://download.docker.com/linux/centos/7/x86_64/stable", "docker-ce")
 func ListPackages(ctx context.Context, repoURL, name string, opts ...Option) ([]Package, error) {
 	return New(opts...).ListPackages(ctx, repoURL, name)
 }
 
-// FindPackages 读取仓库 repoURL 并返回满足 q 的软件包列表。
+// FindPackages reads the repository at repoURL and returns the packages matching q.
 func FindPackages(ctx context.Context, repoURL string, q Query, opts ...Option) ([]Package, error) {
 	return New(opts...).FindPackages(ctx, repoURL, q)
 }
 
-// FindPackage 返回仓库中版本最新的匹配包，找不到时返回 ErrPackageNotFound。
+// FindPackage returns the newest matching package in the repository, or ErrPackageNotFound when
+// there is none.
 func FindPackage(ctx context.Context, repoURL, name string, opts ...Option) (*Package, error) {
 	pkgs, err := New(opts...).FindPackages(ctx, repoURL, Query{Name: name, Latest: true, Limit: 1})
 	if err != nil {

@@ -21,7 +21,8 @@ import (
 
 const testRepoBase = "https://repo.test/debian"
 
-// testPackagesAMD64 模拟真实的 Packages 索引内容（字段与 Debian 官方索引一致）。
+// testPackagesAMD64 mimics the content of a real Packages index (the fields match the official
+// Debian index).
 const testPackagesAMD64 = `Package: nginx
 Version: 1.22.1-9
 Architecture: amd64
@@ -71,7 +72,7 @@ Size: 12345678
 SHA256: 3333333333333333333333333333333333333333333333333333333333333333
 `
 
-// testPackagesAll 模拟 Debian 13 起独立的 binary-all 索引。
+// testPackagesAll mimics the separate binary-all index introduced in Debian 13.
 const testPackagesAll = `Package: ca-certificates
 Version: 20230311
 Architecture: all
@@ -87,7 +88,7 @@ Size: 152000
 SHA256: 4444444444444444444444444444444444444444444444444444444444444444
 `
 
-// testSources 模拟 Sources 索引内容。
+// testSources mimics the content of a Sources index.
 const testSources = `Package: nginx
 Binary: nginx, nginx-doc
 Version: 1.24.0-1
@@ -110,7 +111,8 @@ Vcs-Git: https://salsa.debian.org/nginx-team/nginx.git
 Vcs-Browser: https://salsa.debian.org/nginx-team/nginx
 `
 
-// mapFetcher 是一个内存中的 Fetcher，用路径作为键，便于离线测试整个流程。
+// mapFetcher is an in-memory Fetcher keyed by path, which makes it convenient to test the whole flow
+// offline.
 type mapFetcher struct {
 	files  map[string][]byte
 	mu     sync.Mutex
@@ -153,7 +155,8 @@ func (f *mapFetcher) put(path string, data []byte) {
 	f.files[path] = data
 }
 
-// testRepository 构造一个完整的离线仓库：Release + Packages(xz/gz) + binary-all + Sources。
+// testRepository builds a complete offline repository: Release + Packages(xz/gz) + binary-all +
+// Sources.
 func testRepository(t *testing.T) *mapFetcher {
 	t.Helper()
 	xzAMD64 := xzBytes(t, []byte(testPackagesAMD64))
@@ -181,13 +184,13 @@ func testRepository(t *testing.T) *mapFetcher {
 	return fetcher
 }
 
-// releaseFile 是 buildRelease 的输入：索引路径与其内容。
+// releaseFile is the input of buildRelease: an index path and its content.
 type releaseFile struct {
 	path string
 	data []byte
 }
 
-// buildRelease 生成与真实仓库一致的 Release 文件（SHA256 分节 + by-hash）。
+// buildRelease generates a Release file matching a real repository (SHA256 section + by-hash).
 func buildRelease(t *testing.T, files []releaseFile) []byte {
 	t.Helper()
 	var sb strings.Builder
@@ -201,7 +204,7 @@ func buildRelease(t *testing.T, files []releaseFile) []byte {
 	sb.WriteString("Acquire-By-Hash: yes\n")
 	sb.WriteString("Architectures: amd64 all\n")
 	sb.WriteString("Components: main\n")
-	sb.WriteString("Description: pkgrepo 测试仓库\n")
+	sb.WriteString("Description: pkgrepo test repository\n")
 	sb.WriteString("SHA256:\n")
 	for _, file := range files {
 		sb.WriteString(" " + sha256Hex(file.data) + " " + strconv.Itoa(len(file.data)) + " " + file.path + "\n")
@@ -214,10 +217,10 @@ func gzipBytes(t *testing.T, data []byte) []byte {
 	var buffer bytes.Buffer
 	writer := gzip.NewWriter(&buffer)
 	if _, err := writer.Write(data); err != nil {
-		t.Fatalf("gzip 写入失败: %v", err)
+		t.Fatalf("gzip write failed: %v", err)
 	}
 	if err := writer.Close(); err != nil {
-		t.Fatalf("gzip 关闭失败: %v", err)
+		t.Fatalf("gzip close failed: %v", err)
 	}
 	return buffer.Bytes()
 }
@@ -227,13 +230,13 @@ func xzBytes(t *testing.T, data []byte) []byte {
 	var buffer bytes.Buffer
 	writer, err := xz.NewWriter(&buffer)
 	if err != nil {
-		t.Fatalf("xz 初始化失败: %v", err)
+		t.Fatalf("xz initialization failed: %v", err)
 	}
 	if _, err := writer.Write(data); err != nil {
-		t.Fatalf("xz 写入失败: %v", err)
+		t.Fatalf("xz write failed: %v", err)
 	}
 	if err := writer.Close(); err != nil {
-		t.Fatalf("xz 关闭失败: %v", err)
+		t.Fatalf("xz close failed: %v", err)
 	}
 	return buffer.Bytes()
 }
@@ -243,18 +246,18 @@ func sha256Hex(data []byte) string {
 	return hex.EncodeToString(sum[:])
 }
 
-// testClient 返回使用内存数据源的客户端。
+// testClient returns a client backed by the in-memory data source.
 func testClient(t *testing.T, fetcher *mapFetcher, opts ...Option) *Client {
 	t.Helper()
 	return New(append([]Option{WithFetcher(fetcher)}, opts...)...)
 }
 
-// openRepo 使用内存数据源打开测试仓库。
+// openRepo opens the test repository with the in-memory data source.
 func openRepo(t *testing.T, fetcher *mapFetcher, opts ...Option) *Repository {
 	t.Helper()
 	repo, err := Open(context.Background(), testRepoBase, append([]Option{WithFetcher(fetcher)}, opts...)...)
 	if err != nil {
-		t.Fatalf("Open 失败: %v", err)
+		t.Fatalf("Open failed: %v", err)
 	}
 	return repo
 }
@@ -272,7 +275,7 @@ func TestOpenAndFindPackages(t *testing.T) {
 		t.Errorf("Architectures = %v", repo.Architectures)
 	}
 	if repo.Release == nil || !repo.Release.AcquireByHash {
-		t.Fatalf("Release 解析异常: %+v", repo.Release)
+		t.Fatalf("unexpected Release parse result: %+v", repo.Release)
 	}
 	if repo.ReleaseURL != testRepoBase+"/dists/bookworm/Release" {
 		t.Errorf("ReleaseURL = %q", repo.ReleaseURL)
@@ -280,17 +283,17 @@ func TestOpenAndFindPackages(t *testing.T) {
 
 	pkgs, err := repo.FindPackages(ctx, Query{Name: "nginx"})
 	if err != nil {
-		t.Fatalf("FindPackages 失败: %v", err)
+		t.Fatalf("FindPackages failed: %v", err)
 	}
 	if len(pkgs) != 2 {
-		t.Fatalf("匹配到 %d 个包，期望 2: %+v", len(pkgs), pkgs)
+		t.Fatalf("matched %d packages, want 2: %+v", len(pkgs), pkgs)
 	}
 	if pkgs[0].Version.String() != "1.24.0-1" || pkgs[1].Version.String() != "1.22.1-9" {
-		t.Errorf("默认排序 = %q, %q", pkgs[0].Version.String(), pkgs[1].Version.String())
+		t.Errorf("default sort = %q, %q", pkgs[0].Version.String(), pkgs[1].Version.String())
 	}
 	for _, pkg := range pkgs {
 		if pkg.Component != "main" || pkg.Suite != "bookworm" {
-			t.Errorf("包的上下文信息缺失: %+v", pkg)
+			t.Errorf("the context information of the package is missing: %+v", pkg)
 		}
 		if pkg.RepoID != "repo.test/debian" {
 			t.Errorf("RepoID = %q", pkg.RepoID)
@@ -300,13 +303,14 @@ func TestOpenAndFindPackages(t *testing.T) {
 		}
 	}
 
-	// 架构无关包位于 binary-all 索引中，默认扫描会自动带上它。
+	// Architecture-independent packages live in the binary-all index, and the default scan includes
+	// it automatically.
 	all, err := repo.FindPackages(ctx, Query{Name: "ca-certificates"})
 	if err != nil {
-		t.Fatalf("FindPackages 失败: %v", err)
+		t.Fatalf("FindPackages failed: %v", err)
 	}
 	if len(all) != 1 || all[0].Architecture != "all" {
-		t.Fatalf("binary-all 中的包未被扫描到: %+v", all)
+		t.Fatalf("the package in binary-all was not scanned: %+v", all)
 	}
 	if all[0].DownloadURL != testRepoBase+"/pool/main/c/ca-certificates/ca-certificates_20230311_all.deb" {
 		t.Errorf("DownloadURL = %q", all[0].DownloadURL)
@@ -318,21 +322,21 @@ func TestFindPackageLatest(t *testing.T) {
 	pkg := openRepo(t, testRepository(t), WithSuite("bookworm"), WithArchitecture("amd64"))
 	latest, err := pkg.FindPackage(ctx, Query{Name: "nginx"})
 	if err != nil {
-		t.Fatalf("FindPackage 失败: %v", err)
+		t.Fatalf("FindPackage failed: %v", err)
 	}
 	if latest.Version.String() != "1.24.0-1" {
-		t.Errorf("最新版本 = %q", latest.Version.String())
+		t.Errorf("newest version = %q", latest.Version.String())
 	}
 	if _, err := pkg.FindPackage(ctx, Query{Name: "no-such-package"}); !errors.Is(err, ErrPackageNotFound) {
-		t.Errorf("未找到包时应返回 ErrPackageNotFound，实际 %v", err)
+		t.Errorf("a missing package should return ErrPackageNotFound, got %v", err)
 	}
 	pinned, err := pkg.FindPackages(ctx, Query{Name: "nginx", Version: "1.22.1-9"})
 	if err != nil || len(pinned) != 1 || pinned[0].Version.String() != "1.22.1-9" {
-		t.Errorf("按版本查询 = %+v, %v", pinned, err)
+		t.Errorf("version query = %+v, %v", pinned, err)
 	}
 	provides, err := pkg.FindPackages(ctx, Query{Provides: "docker-engine"})
 	if err != nil || len(provides) != 1 || provides[0].Name != "docker-ce" {
-		t.Errorf("按 Provides 查询 = %+v, %v", provides, err)
+		t.Errorf("Provides query = %+v, %v", provides, err)
 	}
 }
 
@@ -342,7 +346,7 @@ func TestPackageLevelHelpers(t *testing.T) {
 	pkgs, err := ListPackages(ctx, testRepoBase, "docker-ce",
 		WithFetcher(fetcher), WithSuite("bookworm"), WithArchitecture("amd64"))
 	if err != nil {
-		t.Fatalf("ListPackages 失败: %v", err)
+		t.Fatalf("ListPackages failed: %v", err)
 	}
 	if len(pkgs) != 1 || pkgs[0].Version.String() != "5:27.0.3-1~debian.12~bookworm" {
 		t.Fatalf("ListPackages = %+v", pkgs)
@@ -353,15 +357,15 @@ func TestPackageLevelHelpers(t *testing.T) {
 	found, err := FindPackage(ctx, testRepoBase, "nginx",
 		WithFetcher(fetcher), WithSuite("bookworm"), WithArchitecture("amd64"))
 	if err != nil {
-		t.Fatalf("FindPackage 失败: %v", err)
+		t.Fatalf("FindPackage failed: %v", err)
 	}
 	if found.Version.String() != "1.24.0-1" {
 		t.Errorf("FindPackage = %q", found.Version.String())
 	}
-	// 同一个 fetcher 是内存数据源，可以反复使用。
+	// The same fetcher is an in-memory data source and can be reused.
 	if _, err := FindPackages(ctx, testRepoBase, Query{Name: "curl"},
 		WithFetcher(fetcher), WithSuite("bookworm"), WithArchitecture("amd64")); err != nil {
-		t.Fatalf("FindPackages 失败: %v", err)
+		t.Fatalf("FindPackages failed: %v", err)
 	}
 }
 
@@ -370,10 +374,10 @@ func TestChecksumVerification(t *testing.T) {
 	fetcher := testRepository(t)
 	repo := openRepo(t, fetcher, WithSuite("bookworm"), WithArchitecture("amd64"), WithChecksumVerification(true))
 	if _, err := repo.FindPackages(ctx, Query{Name: "nginx"}); err != nil {
-		t.Fatalf("校验开启时查询失败: %v", err)
+		t.Fatalf("the query failed while verification was enabled: %v", err)
 	}
 
-	// 篡改 Release 中记录的 SHA256（模拟被篡改或过期的索引）。
+	// Tamper with the SHA256 recorded in the Release file (simulating a tampered or stale index).
 	tampered := testRepository(t)
 	releasePath := "/debian/dists/bookworm/Release"
 	release := string(tampered.files[releasePath])
@@ -384,24 +388,24 @@ func TestChecksumVerification(t *testing.T) {
 	repo = openRepo(t, tampered, WithSuite("bookworm"), WithArchitecture("amd64"), WithChecksumVerification(true))
 	_, err := repo.FindPackages(ctx, Query{Name: "nginx"})
 	if !errors.Is(err, ErrChecksumMismatch) {
-		t.Errorf("校验不匹配时应返回 ErrChecksumMismatch，实际 %v", err)
+		t.Errorf("a checksum mismatch should return ErrChecksumMismatch, got %v", err)
 	}
 }
 
 func TestByHashFallback(t *testing.T) {
 	ctx := context.Background()
 	fetcher := testRepository(t)
-	// 模拟镜像站只提供 by-hash 地址（常规路径 404）。
+	// Simulate a mirror that only serves by-hash addresses (the regular path returns 404).
 	fetcher.remove("/debian/dists/bookworm/main/binary-amd64/Packages.xz")
 	fetcher.remove("/debian/dists/bookworm/main/binary-amd64/Packages.gz")
 
 	repo := openRepo(t, fetcher, WithSuite("bookworm"), WithArchitecture("amd64"))
 	pkgs, err := repo.FindPackages(ctx, Query{Name: "nginx"})
 	if err != nil {
-		t.Fatalf("FindPackages 失败: %v", err)
+		t.Fatalf("FindPackages failed: %v", err)
 	}
 	if len(pkgs) != 2 {
-		t.Fatalf("匹配到 %d 个包，期望 2", len(pkgs))
+		t.Fatalf("matched %d packages, want 2", len(pkgs))
 	}
 	found := false
 	for _, path := range fetcher.requested() {
@@ -411,14 +415,14 @@ func TestByHashFallback(t *testing.T) {
 		}
 	}
 	if !found {
-		t.Errorf("应当回退到 by-hash 地址: %v", fetcher.requested())
+		t.Errorf("it should fall back to the by-hash address: %v", fetcher.requested())
 	}
 
-	// WithByHashFirst 时应当优先请求 by-hash 地址。
+	// WithByHashFirst should request the by-hash address first.
 	first := testRepository(t)
 	repo = openRepo(t, first, WithSuite("bookworm"), WithArchitecture("amd64"), WithByHashFirst(true))
 	if _, err := repo.FindPackages(ctx, Query{Name: "nginx"}); err != nil {
-		t.Fatalf("FindPackages 失败: %v", err)
+		t.Fatalf("FindPackages failed: %v", err)
 	}
 	requested := first.requested()
 	index := -1
@@ -429,7 +433,7 @@ func TestByHashFallback(t *testing.T) {
 		}
 	}
 	if index < 0 || !strings.Contains(requested[index], "/by-hash/SHA256/") {
-		t.Errorf("WithByHashFirst 应当优先请求 by-hash，实际 %v", requested)
+		t.Errorf("WithByHashFirst should request by-hash first, got %v", requested)
 	}
 }
 
@@ -438,32 +442,33 @@ func TestOpenWithIndexURL(t *testing.T) {
 	indexURL := testRepoBase + "/dists/bookworm/main/binary-amd64/Packages.gz"
 	repo, err := Open(ctx, indexURL, WithFetcher(testRepository(t)))
 	if err != nil {
-		t.Fatalf("Open 失败: %v", err)
+		t.Fatalf("Open failed: %v", err)
 	}
 	if repo.Suite != "bookworm" || strings.Join(repo.Components, ",") != "main" {
-		t.Errorf("从索引地址推断出的信息 = %q, %v", repo.Suite, repo.Components)
+		t.Errorf("information inferred from the index address = %q, %v", repo.Suite, repo.Components)
 	}
 	if _, err := repo.FindPackages(ctx, Query{Name: "nginx"}); err != nil {
-		t.Fatalf("FindPackages 失败: %v", err)
+		t.Fatalf("FindPackages failed: %v", err)
 	}
 
-	// 仓库没有 Release 时，直接使用调用方给出的索引地址（例如自建的小仓库）。
+	// When the repository has no Release file, the index address given by the caller is used directly
+	// (for example in a small self-hosted repository).
 	onlyIndex := &mapFetcher{files: map[string][]byte{
 		"/debian/dists/bookworm/main/binary-amd64/Packages.gz": gzipBytes(t, []byte(testPackagesAMD64)),
 	}}
 	repo, err = Open(ctx, indexURL, WithFetcher(onlyIndex))
 	if err != nil {
-		t.Fatalf("无 Release 时 Open 失败: %v", err)
+		t.Fatalf("Open without a Release file failed: %v", err)
 	}
 	if repo.Release != nil {
-		t.Error("无 Release 时 Release 应当为 nil")
+		t.Error("Release should be nil when there is no Release file")
 	}
 	pkgs, err := repo.FindPackages(ctx, Query{Name: "docker-ce"})
 	if err != nil {
-		t.Fatalf("FindPackages 失败: %v", err)
+		t.Fatalf("FindPackages failed: %v", err)
 	}
 	if len(pkgs) != 1 || pkgs[0].DownloadURL != testRepoBase+"/pool/stable/amd64/docker-ce_27.0.3-1~debian.12~bookworm_amd64.deb" {
-		t.Errorf("结果 = %+v", pkgs)
+		t.Errorf("result = %+v", pkgs)
 	}
 }
 
@@ -471,16 +476,16 @@ func TestOpenErrors(t *testing.T) {
 	ctx := context.Background()
 	fetcher := testRepository(t)
 	if _, err := Open(ctx, testRepoBase, WithFetcher(fetcher)); !errors.Is(err, ErrSuiteRequired) {
-		t.Errorf("未指定 suite 时应返回 ErrSuiteRequired，实际 %v", err)
+		t.Errorf("an unset suite should return ErrSuiteRequired, got %v", err)
 	}
 	if _, err := Open(ctx, testRepoBase, WithFetcher(fetcher), WithSuite("nosuchsuite")); !errors.Is(err, ErrNotRepository) {
-		t.Errorf("不存在的 suite 应返回 ErrNotRepository，实际 %v", err)
+		t.Errorf("a nonexistent suite should return ErrNotRepository, got %v", err)
 	}
 	if _, err := Open(ctx, "ftp://repo.test/debian", WithFetcher(fetcher), WithSuite("bookworm")); err == nil {
-		t.Error("不支持的协议应当返回错误")
+		t.Error("an unsupported scheme should return an error")
 	}
 	if _, err := Open(ctx, "  ", WithFetcher(fetcher), WithSuite("bookworm")); err == nil {
-		t.Error("空地址应当返回错误")
+		t.Error("an empty address should return an error")
 	}
 }
 
@@ -489,10 +494,10 @@ func TestFindSources(t *testing.T) {
 	repo := openRepo(t, testRepository(t), WithSuite("bookworm"), WithArchitecture("amd64"))
 	source, err := repo.FindSource(ctx, SourceQuery{Name: "nginx"})
 	if err != nil {
-		t.Fatalf("FindSource 失败: %v", err)
+		t.Fatalf("FindSource failed: %v", err)
 	}
 	if source.ID() != "nginx_1.24.0-1" || source.Directory != "pool/main/n/nginx" {
-		t.Errorf("源码包 = %s，目录 = %s", source.ID(), source.Directory)
+		t.Errorf("source package = %s, directory = %s", source.ID(), source.Directory)
 	}
 	if strings.Join(source.Binary, ",") != "nginx,nginx-doc" {
 		t.Errorf("Binary = %v", source.Binary)
@@ -512,13 +517,13 @@ func TestFindSources(t *testing.T) {
 	}
 	dscURL, err := source.FileURL(dsc.Path)
 	if err != nil {
-		t.Fatalf("FileURL 失败: %v", err)
+		t.Fatalf("FileURL failed: %v", err)
 	}
 	if dscURL != testRepoBase+"/pool/main/n/nginx/nginx_1.24.0-1.dsc" {
 		t.Errorf("FileURL = %q", dscURL)
 	}
 	if _, err := repo.FindSource(ctx, SourceQuery{Name: "no-such-source"}); !errors.Is(err, ErrPackageNotFound) {
-		t.Errorf("未找到源码包时应返回 ErrPackageNotFound，实际 %v", err)
+		t.Errorf("a missing source package should return ErrPackageNotFound, got %v", err)
 	}
 }
 
@@ -529,59 +534,59 @@ func TestLocalDirectoryRepository(t *testing.T) {
 	for path, data := range fetcher.files {
 		filePath := filepath.Join(dir, filepath.FromSlash(path))
 		if err := os.MkdirAll(filepath.Dir(filePath), 0o755); err != nil {
-			t.Fatalf("创建目录失败: %v", err)
+			t.Fatalf("creating the directory failed: %v", err)
 		}
 		if err := os.WriteFile(filePath, data, 0o644); err != nil {
-			t.Fatalf("写入文件失败: %v", err)
+			t.Fatalf("writing the file failed: %v", err)
 		}
 	}
 	repo, err := Open(ctx, filepath.Join(dir, "debian"), WithSuite("bookworm"), WithArchitecture("amd64"))
 	if err != nil {
-		t.Fatalf("Open 本地目录失败: %v", err)
+		t.Fatalf("Open of a local directory failed: %v", err)
 	}
 	if repo.BaseURL.Scheme != "file" {
 		t.Errorf("BaseURL = %q", repo.BaseURL)
 	}
 	pkgs, err := repo.FindPackages(ctx, Query{Name: "nginx", Latest: true})
 	if err != nil {
-		t.Fatalf("FindPackages 失败: %v", err)
+		t.Fatalf("FindPackages failed: %v", err)
 	}
 	if len(pkgs) != 1 || pkgs[0].Version.String() != "1.24.0-1" {
-		t.Fatalf("结果 = %+v", pkgs)
+		t.Fatalf("result = %+v", pkgs)
 	}
 	if !strings.HasPrefix(pkgs[0].DownloadURL, "file://") {
 		t.Errorf("DownloadURL = %q", pkgs[0].DownloadURL)
 	}
 
-	// file:// 地址同样可用。
+	// A file:// address works as well.
 	repoURL := (&url.URL{Scheme: "file", Path: filepath.Join(dir, "debian")}).String()
 	if _, err := Open(ctx, repoURL, WithSuite("bookworm"), WithArchitecture("amd64")); err != nil {
-		t.Fatalf("Open file:// 失败: %v", err)
+		t.Fatalf("Open of a file:// address failed: %v", err)
 	}
 }
 
 func TestScanErrorPropagation(t *testing.T) {
 	ctx := context.Background()
 	repo := openRepo(t, testRepository(t), WithSuite("bookworm"), WithArchitecture("amd64"))
-	sentinel := errors.New("停止扫描")
+	sentinel := errors.New("stop scanning")
 	count := 0
 	err := repo.Scan(ctx, func(*Package) error {
 		count++
 		return sentinel
 	})
 	if !errors.Is(err, sentinel) {
-		t.Errorf("错误 = %v，期望 %v", err, sentinel)
+		t.Errorf("error = %v, want %v", err, sentinel)
 	}
 	if count != 1 {
-		t.Errorf("扫描了 %d 个包，期望 1", count)
+		t.Errorf("scanned %d packages, want 1", count)
 	}
-	// 全部包（含 binary-all）都能被扫描到。
+	// Every package (including those from binary-all) can be scanned.
 	total := 0
 	if err := repo.Scan(ctx, func(*Package) error { total++; return nil }); err != nil {
-		t.Fatalf("Scan 失败: %v", err)
+		t.Fatalf("Scan failed: %v", err)
 	}
 	if total != 4 {
-		t.Errorf("扫描到 %d 个包，期望 4", total)
+		t.Errorf("scanned %d packages, want 4", total)
 	}
 }
 
@@ -590,31 +595,31 @@ func TestIndexes(t *testing.T) {
 	repo := openRepo(t, fetcher, WithSuite("bookworm"), WithArchitecture("amd64"))
 	indexes := repo.Indexes()
 	if len(indexes) != 2 {
-		t.Fatalf("索引数量 = %d，期望 2（amd64 + all）", len(indexes))
+		t.Fatalf("index count = %d, want 2 (amd64 + all)", len(indexes))
 	}
 	first := indexes[0]
 	if first.Kind != IndexPackages || first.Component != "main" || first.Architecture != "amd64" {
-		t.Errorf("索引 = %+v", first)
+		t.Errorf("index = %+v", first)
 	}
 	if !first.FromRelease || !strings.HasSuffix(first.Path, "Packages.xz") {
-		t.Errorf("首选索引 = %+v", first)
+		t.Errorf("preferred index = %+v", first)
 	}
 	if CompressionOf(first.Path) != "xz" || CompressionOf("Packages.gz") != "gzip" {
-		t.Errorf("CompressionOf 判断错误")
+		t.Errorf("CompressionOf returned a wrong result")
 	}
 	if len(first.Candidates) != 4 {
-		t.Errorf("候选数量 = %d，期望 4（xz/by-hash + gz/by-hash）", len(first.Candidates))
+		t.Errorf("candidate count = %d, want 4 (xz/by-hash + gz/by-hash)", len(first.Candidates))
 	}
 	if !first.Candidates[1].ByHash || first.Candidates[1].Size == 0 {
-		t.Errorf("by-hash 候选 = %+v", first.Candidates[1])
+		t.Errorf("by-hash candidate = %+v", first.Candidates[1])
 	}
 	if indexes[1].Architecture != "all" {
-		t.Errorf("第二个索引 = %+v", indexes[1])
+		t.Errorf("second index = %+v", indexes[1])
 	}
 	sourceIndexes := repo.SourceIndexes()
 	if len(sourceIndexes) != 1 || sourceIndexes[0].Kind != IndexSources ||
 		!strings.HasSuffix(sourceIndexes[0].Path, "Sources.gz") {
-		t.Errorf("源码索引 = %+v", sourceIndexes)
+		t.Errorf("source indexes = %+v", sourceIndexes)
 	}
 }
 
@@ -688,29 +693,29 @@ func TestParseRepoURL(t *testing.T) {
 	for _, tc := range cases {
 		location, err := parseRepoURL(tc.in)
 		if err != nil {
-			t.Errorf("parseRepoURL(%q) 失败: %v", tc.in, err)
+			t.Errorf("parseRepoURL(%q) failed: %v", tc.in, err)
 			continue
 		}
 		if got := location.base.String(); got != tc.base {
-			t.Errorf("parseRepoURL(%q) base = %q，期望 %q", tc.in, got, tc.base)
+			t.Errorf("parseRepoURL(%q) base = %q, want %q", tc.in, got, tc.base)
 		}
 		if location.suite != tc.suite || location.component != tc.component ||
 			location.architecture != tc.architecture || location.kind != tc.kind {
-			t.Errorf("parseRepoURL(%q) = %q/%q/%q/%q，期望 %q/%q/%q/%q", tc.in,
+			t.Errorf("parseRepoURL(%q) = %q/%q/%q/%q, want %q/%q/%q/%q", tc.in,
 				location.suite, location.component, location.architecture, location.kind,
 				tc.suite, tc.component, tc.architecture, tc.kind)
 		}
 		if location.indexPath != tc.indexPath || location.indexURL != tc.indexURL {
-			t.Errorf("parseRepoURL(%q) 索引 = %q/%q，期望 %q/%q", tc.in,
+			t.Errorf("parseRepoURL(%q) index = %q/%q, want %q/%q", tc.in,
 				location.indexPath, location.indexURL, tc.indexPath, tc.indexURL)
 		}
 	}
 
 	if _, err := parseRepoURL(""); err == nil {
-		t.Error("空地址应当返回错误")
+		t.Error("an empty address should return an error")
 	}
 	if _, err := parseRepoURL("ftp://repo.test/debian"); err == nil {
-		t.Error("不支持的协议应当返回错误")
+		t.Error("an unsupported scheme should return an error")
 	}
 }
 
@@ -721,11 +726,11 @@ func TestHostArchitecture(t *testing.T) {
 	}
 	for goarch, want := range cases {
 		if got := dpkgArchitecture(goarch); got != want {
-			t.Errorf("dpkgArchitecture(%q) = %q，期望 %q", goarch, got, want)
+			t.Errorf("dpkgArchitecture(%q) = %q, want %q", goarch, got, want)
 		}
 	}
 	if HostArchitecture() == "" {
-		t.Error("HostArchitecture 不应为空")
+		t.Error("HostArchitecture should not be empty")
 	}
 }
 
@@ -733,21 +738,22 @@ func TestByHashURL(t *testing.T) {
 	checksum := Checksum{Type: "sha256", Value: strings.Repeat("a", 64)}
 	got, err := byHashURL("https://repo.test/debian/dists/bookworm/main/binary-amd64/Packages.xz", checksum)
 	if err != nil {
-		t.Fatalf("byHashURL 失败: %v", err)
+		t.Fatalf("byHashURL failed: %v", err)
 	}
 	want := "https://repo.test/debian/dists/bookworm/main/binary-amd64/by-hash/SHA256/" + strings.Repeat("a", 64)
 	if got != want {
-		t.Errorf("byHashURL = %q，期望 %q", got, want)
+		t.Errorf("byHashURL = %q, want %q", got, want)
 	}
 	if _, err := byHashURL("", Checksum{Type: "crc32", Value: "x"}); err == nil {
-		t.Error("不支持的算法应当返回错误")
+		t.Error("an unsupported algorithm should return an error")
 	}
 }
 
 func TestIndexNotFound(t *testing.T) {
 	ctx := context.Background()
 	fetcher := testRepository(t)
-	// 删掉所有二进制索引与 by-hash 候选，模拟仓库不提供该架构的索引。
+	// Delete every binary index and by-hash candidate to simulate a repository that does not provide
+	// an index for this architecture.
 	for path := range fetcher.files {
 		if strings.Contains(path, "binary-") {
 			fetcher.remove(path)
@@ -763,7 +769,7 @@ func TestIndexNotFound(t *testing.T) {
 	fetcher.put("/debian/dists/bookworm/Release", []byte(strings.Join(kept, "\n")))
 	repo := openRepo(t, fetcher, WithSuite("bookworm"), WithArchitecture("amd64"))
 	if _, err := repo.FindPackages(ctx, Query{Name: "nginx"}); !errors.Is(err, ErrIndexNotFound) {
-		t.Errorf("缺少索引时应返回 ErrIndexNotFound，实际 %v", err)
+		t.Errorf("a missing index should return ErrIndexNotFound, got %v", err)
 	}
 }
 
@@ -781,23 +787,23 @@ func TestCompressionDetection(t *testing.T) {
 	for _, tc := range cases {
 		body, format, err := decompress(bytes.NewReader(tc.data))
 		if err != nil {
-			t.Errorf("%s: decompress 失败: %v", tc.name, err)
+			t.Errorf("%s: decompress failed: %v", tc.name, err)
 			continue
 		}
 		decoded, err := io.ReadAll(body)
 		if err != nil {
-			t.Errorf("%s: 读取失败: %v", tc.name, err)
+			t.Errorf("%s: read failed: %v", tc.name, err)
 		}
 		body.Close()
 		if format != tc.want {
-			t.Errorf("%s: 格式 = %q，期望 %q", tc.name, format, tc.want)
+			t.Errorf("%s: format = %q, want %q", tc.name, format, tc.want)
 		}
 		if string(decoded) != data {
-			t.Errorf("%s: 内容 = %q", tc.name, decoded)
+			t.Errorf("%s: content = %q", tc.name, decoded)
 		}
 	}
 	if _, _, err := decompress(bytes.NewReader(nil)); err != nil {
-		t.Errorf("空数据不应报错: %v", err)
+		t.Errorf("empty data should not fail: %v", err)
 	}
 }
 
@@ -806,15 +812,15 @@ func TestFindPackagesLimitAndSort(t *testing.T) {
 	repo := openRepo(t, testRepository(t), WithSuite("bookworm"), WithArchitecture("amd64"))
 	pkgs, err := repo.FindPackages(ctx, Query{Name: "*", Limit: 2, Sort: SortVersionAsc})
 	if err != nil {
-		t.Fatalf("FindPackages 失败: %v", err)
+		t.Fatalf("FindPackages failed: %v", err)
 	}
 	if len(pkgs) != 2 {
 		t.Fatalf("Limit = %d", len(pkgs))
 	}
 	if pkgs[0].Name != "ca-certificates" {
-		t.Errorf("按名称+版本升序的第一个包 = %q", pkgs[0].Name)
+		t.Errorf("the first package in name+version-ascending order = %q", pkgs[0].Name)
 	}
 	if pkgs[0].String() == "" {
-		t.Error("Package.String() 不应为空")
+		t.Error("Package.String() should not be empty")
 	}
 }

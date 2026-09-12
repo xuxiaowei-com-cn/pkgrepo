@@ -13,7 +13,8 @@ import (
 	"github.com/ulikunitz/xz"
 )
 
-// 各压缩格式的 magic 前缀，用于按内容（而不是文件名后缀）识别格式。
+// Magic prefixes of the supported compression formats, used to detect the format by content rather
+// than by file name suffix.
 var (
 	gzipMagic  = []byte{0x1f, 0x8b}
 	bzip2Magic = []byte{'B', 'Z', 'h'}
@@ -21,20 +22,21 @@ var (
 	zstdMagic  = []byte{0x28, 0xb5, 0x2f, 0xfd}
 )
 
-// decompress 按 magic 自动识别压缩格式并返回解压后的读取器。
-// 第二个返回值表示数据是否经过压缩；返回的 io.ReadCloser 关闭时会一并关闭底层读取器。
+// decompress detects the compression format by magic bytes and returns a reader over the
+// decompressed data. The second return value reports whether the data was compressed; closing the
+// returned io.ReadCloser also closes the underlying reader.
 func decompress(raw io.Reader) (io.ReadCloser, bool, error) {
 	buffered := bufio.NewReaderSize(raw, 4096)
 	head, err := buffered.Peek(len(xzMagic))
 	if err != nil && err != io.EOF {
-		return nil, false, fmt.Errorf("rpmrepo: 读取元数据失败: %w", err)
+		return nil, false, fmt.Errorf("rpmrepo: reading metadata failed: %w", err)
 	}
 
 	switch {
 	case bytes.HasPrefix(head, gzipMagic):
 		zr, err := gzip.NewReader(buffered)
 		if err != nil {
-			return nil, true, fmt.Errorf("rpmrepo: 解压 gzip 元数据失败: %w", err)
+			return nil, true, fmt.Errorf("rpmrepo: decompressing gzip metadata failed: %w", err)
 		}
 		return &compoundCloser{Reader: zr, closers: []io.Closer{zr, closerOf(raw)}}, true, nil
 	case bytes.HasPrefix(head, bzip2Magic):
@@ -42,18 +44,19 @@ func decompress(raw io.Reader) (io.ReadCloser, bool, error) {
 	case bytes.HasPrefix(head, xzMagic):
 		xr, err := xz.NewReader(buffered)
 		if err != nil {
-			return nil, true, fmt.Errorf("rpmrepo: 解压 xz 元数据失败: %w", err)
+			return nil, true, fmt.Errorf("rpmrepo: decompressing xz metadata failed: %w", err)
 		}
 		return &compoundCloser{Reader: xr, closers: []io.Closer{closerOf(raw)}}, true, nil
 	case bytes.HasPrefix(head, zstdMagic):
 		zr, err := zstd.NewReader(buffered, zstd.WithDecoderConcurrency(1), zstd.WithDecoderLowmem(true))
 		if err != nil {
-			return nil, true, fmt.Errorf("rpmrepo: 解压 zstd 元数据失败: %w", err)
+			return nil, true, fmt.Errorf("rpmrepo: decompressing zstd metadata failed: %w", err)
 		}
 		return &compoundCloser{Reader: zr, closers: []io.Closer{zr.IOReadCloser(), closerOf(raw)}}, true, nil
 	}
 
-	// 未识别的 magic：按未压缩的 XML 处理，首个非空白字符必须是 '<'。
+	// Unrecognized magic: treat the data as uncompressed XML, whose first non-whitespace character
+	// must be '<'.
 	if err := checkPlainXML(head); err != nil {
 		return nil, false, err
 	}
@@ -68,14 +71,15 @@ func checkPlainXML(head []byte) error {
 		case '<':
 			return nil
 		default:
-			return fmt.Errorf("%w: 既不是 XML，也不是 gzip/bzip2/xz/zstd 压缩数据",
+			return fmt.Errorf("%w: data is neither XML nor gzip/bzip2/xz/zstd compressed",
 				ErrUnsupportedCompression)
 		}
 	}
 	return nil
 }
 
-// CompressionOf 根据元数据文件名返回可读的压缩格式名，仅用于展示。
+// CompressionOf returns a human-readable compression format name based on the metadata file name;
+// it is meant for display purposes only.
 func CompressionOf(name string) string {
 	switch {
 	case strings.HasSuffix(name, ".gz"):

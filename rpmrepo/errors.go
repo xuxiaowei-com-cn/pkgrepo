@@ -6,35 +6,38 @@ import (
 )
 
 var (
-	// ErrNotRepository 表示给定的地址不是有效的 RPM 仓库（读不到 repodata/repomd.xml）。
-	ErrNotRepository = errors.New("rpmrepo: 不是有效的 rpm 仓库，无法读取 repodata/repomd.xml")
+	// ErrNotRepository indicates that the given address is not a valid RPM repository
+	// (repodata/repomd.xml cannot be read).
+	ErrNotRepository = errors.New("rpmrepo: not a valid rpm repository, cannot read repodata/repomd.xml")
 
-	// ErrPrimaryNotFound 表示 repomd.xml 中缺少 primary 元数据条目。
-	ErrPrimaryNotFound = errors.New("rpmrepo: repomd.xml 中缺少 primary 元数据")
+	// ErrPrimaryNotFound indicates that repomd.xml has no primary metadata entry.
+	ErrPrimaryNotFound = errors.New("rpmrepo: repomd.xml is missing primary metadata")
 
-	// ErrUnsupportedCompression 表示元数据使用了不支持的压缩格式。
-	ErrUnsupportedCompression = errors.New("rpmrepo: 不支持的元数据压缩格式")
+	// ErrUnsupportedCompression indicates that the metadata uses an unsupported compression format.
+	ErrUnsupportedCompression = errors.New("rpmrepo: unsupported metadata compression format")
 
-	// ErrUnsupportedChecksum 表示元数据使用了不支持的校验算法。
-	ErrUnsupportedChecksum = errors.New("rpmrepo: 不支持的校验算法")
+	// ErrUnsupportedChecksum indicates that the metadata uses an unsupported checksum algorithm.
+	ErrUnsupportedChecksum = errors.New("rpmrepo: unsupported checksum algorithm")
 
-	// ErrChecksumMismatch 表示元数据校验和不匹配（可能下载不完整或被篡改）。
-	ErrChecksumMismatch = errors.New("rpmrepo: 元数据校验和不匹配")
+	// ErrChecksumMismatch indicates that the metadata checksum does not match (the download may be
+	// incomplete or tampered with).
+	ErrChecksumMismatch = errors.New("rpmrepo: metadata checksum mismatch")
 
-	// ErrPackageNotFound 表示仓库中没有匹配的软件包，由 FindPackage 返回。
-	ErrPackageNotFound = errors.New("rpmrepo: 未找到匹配的软件包")
+	// ErrPackageNotFound indicates that the repository has no matching package; it is returned by
+	// FindPackage.
+	ErrPackageNotFound = errors.New("rpmrepo: matching package not found")
 )
 
-// HTTPError 表示 HTTP 请求返回了非 2xx 状态码。
+// HTTPError indicates that an HTTP request returned a non-2xx status code.
 type HTTPError struct {
-	// URL 是请求地址。
+	// URL is the request address.
 	URL string
-	// StatusCode 是 HTTP 状态码。
+	// StatusCode is the HTTP status code.
 	StatusCode int
-	// Status 是状态行，例如 "404 Not Found"。
+	// Status is the status line, for example "404 Not Found".
 	Status string
 }
 
 func (e *HTTPError) Error() string {
-	return fmt.Sprintf("rpmrepo: 请求 %s 失败: %s", e.URL, e.Status)
+	return fmt.Sprintf("rpmrepo: request %s failed: %s", e.URL, e.Status)
 }

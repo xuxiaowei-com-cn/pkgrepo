@@ -45,7 +45,7 @@ func TestQueryMatchName(t *testing.T) {
 	}
 	for _, tc := range cases {
 		if got := countMatches(pkgs, tc.query); got != tc.want {
-			t.Errorf("Query%+v 匹配到 %d 个包，期望 %d 个", tc.query, got, tc.want)
+			t.Errorf("Query%+v matched %d packages, want %d", tc.query, got, tc.want)
 		}
 	}
 }
@@ -57,14 +57,14 @@ func TestQueryMatchArch(t *testing.T) {
 		want  int
 	}{
 		{Query{Arch: "x86_64"}, 2},
-		{Query{Arch: "src"}, 1}, // src 同时匹配 nosrc 架构
+		{Query{Arch: "src"}, 1}, // src also matches the nosrc architecture
 		{Query{Arch: "aarch64"}, 1},
 		{Query{Arch: "*64"}, 3},
 		{Query{Name: "docker-ce", Arch: "x86_64"}, 2},
 	}
 	for _, tc := range cases {
 		if got := countMatches(pkgs, tc.query); got != tc.want {
-			t.Errorf("Query%+v 匹配到 %d 个包，期望 %d 个", tc.query, got, tc.want)
+			t.Errorf("Query%+v matched %d packages, want %d", tc.query, got, tc.want)
 		}
 	}
 }
@@ -85,7 +85,7 @@ func TestQueryMatchVersionAndProvides(t *testing.T) {
 	}
 	for _, tc := range cases {
 		if got := countMatches(pkgs, tc.query); got != tc.want {
-			t.Errorf("Query%+v 匹配到 %d 个包，期望 %d 个", tc.query, got, tc.want)
+			t.Errorf("Query%+v matched %d packages, want %d", tc.query, got, tc.want)
 		}
 	}
 }
@@ -103,16 +103,16 @@ func TestQuerySort(t *testing.T) {
 	assertOrder := func(t *testing.T, name string, got, want []string) {
 		t.Helper()
 		if len(got) != len(want) {
-			t.Fatalf("%s: 长度为 %d，期望 %d", name, len(got), len(want))
+			t.Fatalf("%s: length is %d, want %d", name, len(got), len(want))
 		}
 		for i := range got {
 			if got[i] != want[i] {
-				t.Fatalf("%s: 第 %d 项为 %s，期望 %s（完整结果 %v）", name, i, got[i], want[i], got)
+				t.Fatalf("%s: item %d is %s, want %s (full result %v)", name, i, got[i], want[i], got)
 			}
 		}
 	}
 
-	t.Run("默认排序", func(t *testing.T) {
+	t.Run("default sort", func(t *testing.T) {
 		sorted := append([]Package(nil), pkgs...)
 		Query{}.sort(sorted)
 		assertOrder(t, "SortDefault", nevrAs(sorted), []string{
@@ -124,7 +124,7 @@ func TestQuerySort(t *testing.T) {
 		})
 	})
 
-	t.Run("版本升序", func(t *testing.T) {
+	t.Run("version ascending", func(t *testing.T) {
 		sorted := append([]Package(nil), pkgs...)
 		Query{Sort: SortVersionAsc}.sort(sorted)
 		assertOrder(t, "SortVersionAsc", nevrAs(sorted), []string{
@@ -136,7 +136,7 @@ func TestQuerySort(t *testing.T) {
 		})
 	})
 
-	t.Run("构建时间降序", func(t *testing.T) {
+	t.Run("build time descending", func(t *testing.T) {
 		sorted := append([]Package(nil), pkgs...)
 		Query{Sort: SortBuildTimeDesc}.sort(sorted)
 		assertOrder(t, "SortBuildTimeDesc", nevrAs(sorted), []string{
@@ -148,7 +148,7 @@ func TestQuerySort(t *testing.T) {
 		})
 	})
 
-	t.Run("保持原顺序", func(t *testing.T) {
+	t.Run("keep original order", func(t *testing.T) {
 		sorted := append([]Package(nil), pkgs...)
 		Query{Sort: SortNone}.sort(sorted)
 		assertOrder(t, "SortNone", nevrAs(sorted), nevrAs(pkgs))
@@ -158,11 +158,11 @@ func TestQuerySort(t *testing.T) {
 func TestRetainLatest(t *testing.T) {
 	latest := retainLatest(testPackages())
 	if len(latest) != 4 {
-		t.Fatalf("保留 %d 个最新包，期望 4 个（docker-ce 的三个架构加 Docker-CLI）", len(latest))
+		t.Fatalf("kept %d newest packages, want 4 (three docker-ce architectures plus Docker-CLI)", len(latest))
 	}
 	for _, pkg := range latest {
 		if pkg.Name == "docker-ce" && pkg.Version.Version != "24.0.7" {
-			t.Errorf("docker-ce 保留了旧版本 %s", pkg.NEVRA())
+			t.Errorf("docker-ce kept an old version %s", pkg.NEVRA())
 		}
 	}
 }
@@ -181,7 +181,7 @@ func TestFindPackagesLimit(t *testing.T) {
 		matched = matched[:query.Limit]
 	}
 	if len(matched) != 2 || matched[0].Version.Version != "24.0.7" {
-		t.Errorf("Limit 结果不符合预期: %v", matched)
+		t.Errorf("unexpected Limit result: %v", matched)
 	}
 }
 

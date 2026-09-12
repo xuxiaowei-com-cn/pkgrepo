@@ -13,9 +13,9 @@ import (
 	"github.com/ulikunitz/xz"
 )
 
-// 说明：真实仓库（gzip / zstd）的端到端解析在 realrepo_test.go 中验证，
-// 这里只覆盖解压器自身的边界情况。bzip2 与 xz 在生产仓库中已少见，
-// 因此用内存中的压缩数据验证解码器。
+// Note: end-to-end parsing of real repositories (gzip / zstd) is verified in realrepo_test.go; this
+// file only covers the edge cases of the decompressor itself. bzip2 and xz are rare in production
+// repositories, so the decoders are verified with in-memory compressed data.
 
 const decompressSample = `<?xml version="1.0" encoding="UTF-8"?>
 <metadata xmlns="http://linux.duke.edu/metadata/common" packages="1">
@@ -25,13 +25,13 @@ const decompressSample = `<?xml version="1.0" encoding="UTF-8"?>
   </package>
 </metadata>`
 
-// bzip2Original 是 bzip2Sample 解压后的内容。
+// bzip2Original is the decompressed content of bzip2Sample.
 const bzip2Original = `<metadata xmlns="http://linux.duke.edu/metadata/common" packages="1">` +
 	`<package type="rpm"><name>bz2-test</name><arch>noarch</arch>` +
 	`<version epoch="0" ver="1.0" rel="1"/>` +
 	`<checksum type="sha256" pkgid="YES">deadbeef</checksum></package></metadata>`
 
-// bzip2Sample 是 bzip2Original 经 bzip2 -9 压缩后的结果（标准库没有 bzip2 写入实现）。
+// bzip2Sample is bzip2Original compressed with bzip2 -9 (the standard library has no bzip2 writer).
 const bzip2Sample = "425a683931415926535942d67ec200001b9f805003f317020008203fefdf703000acd8694da868c9a1a3401a" +
 	"01a0354d3d4f534d34d0189a00001a135346a1e21a83d40c8c7a90f415ef43a36282eb0128b4c0a4e0b6d160637c32b2403e" +
 	"956eeb67e308889da337d4a154e92bc415133cdd10a732327ec5906e3da6063858616c994023380b56adca412823787ed74b5d" +
@@ -52,33 +52,33 @@ func TestDecompress(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			// 压缩格式按内容识别，与文件名后缀无关。
+			// The compression format is detected by content, independent of the file name suffix.
 			reader, compressed, err := decompress(bytes.NewReader(tc.data))
 			if err != nil {
-				t.Fatalf("decompress 失败: %v", err)
+				t.Fatalf("decompress failed: %v", err)
 			}
 			defer reader.Close()
 			if !compressed {
-				t.Error("压缩数据应当标记为 compressed")
+				t.Error("compressed data should be marked as compressed")
 			}
 			got, err := io.ReadAll(reader)
 			if err != nil {
-				t.Fatalf("读取解压数据失败: %v", err)
+				t.Fatalf("reading the decompressed data failed: %v", err)
 			}
 			if !bytes.Equal(got, tc.want) {
-				t.Errorf("解压结果与原始数据不一致（%d != %d 字节）", len(got), len(tc.want))
+				t.Errorf("the decompressed result differs from the original data (%d != %d bytes)", len(got), len(tc.want))
 			}
 
-			// 用解压后的数据流式解析，确认与解析器衔接正常。
+			// Stream the decompressed data through the parser to confirm the handoff works.
 			var pkg Package
 			if err := ParsePrimary(bytes.NewReader(got), func(p *Package) error {
 				pkg = *p
 				return nil
 			}); err != nil {
-				t.Fatalf("ParsePrimary 失败: %v", err)
+				t.Fatalf("ParsePrimary failed: %v", err)
 			}
 			if pkg.Name != "bz2-test" {
-				t.Errorf("解析出的包名为 %q", pkg.Name)
+				t.Errorf("the parsed package name is %q", pkg.Name)
 			}
 		})
 	}
@@ -87,24 +87,24 @@ func TestDecompress(t *testing.T) {
 func TestDecompressPlainXML(t *testing.T) {
 	reader, compressed, err := decompress(strings.NewReader("  <?xml version=\"1.0\"?>"))
 	if err != nil {
-		t.Fatalf("decompress 失败: %v", err)
+		t.Fatalf("decompress failed: %v", err)
 	}
 	defer reader.Close()
 	if compressed {
-		t.Error("未压缩数据不应标记为 compressed")
+		t.Error("uncompressed data should not be marked as compressed")
 	}
 	if _, err := io.ReadAll(reader); err != nil {
-		t.Fatalf("读取失败: %v", err)
+		t.Fatalf("read failed: %v", err)
 	}
 }
 
 func TestDecompressUnsupported(t *testing.T) {
 	_, _, err := decompress(strings.NewReader("\x00\x01\x02\x03"))
 	if err == nil {
-		t.Fatal("无法识别的数据应当报错")
+		t.Fatal("unrecognized data should fail")
 	}
-	if !strings.Contains(err.Error(), "不支持的元数据压缩格式") {
-		t.Errorf("错误为 %v，期望包含不支持的压缩格式", err)
+	if !strings.Contains(err.Error(), "unsupported metadata compression format") {
+		t.Errorf("error is %v, want it to mention an unsupported compression format", err)
 	}
 }
 
@@ -119,7 +119,7 @@ func TestCompressionOf(t *testing.T) {
 	}
 	for name, want := range cases {
 		if got := CompressionOf(name); got != want {
-			t.Errorf("CompressionOf(%q) = %q，期望 %q", name, got, want)
+			t.Errorf("CompressionOf(%q) = %q, want %q", name, got, want)
 		}
 	}
 }
@@ -127,18 +127,18 @@ func TestCompressionOf(t *testing.T) {
 func TestChecksumAlgorithms(t *testing.T) {
 	for _, algo := range []string{"sha256", "SHA512", "sha384", "sha224", "sha1", "md5"} {
 		if _, err := newHash(algo); err != nil {
-			t.Errorf("算法 %s 应当被支持: %v", algo, err)
+			t.Errorf("algorithm %s should be supported: %v", algo, err)
 		}
 	}
 	if _, err := newHash("sha3-256"); err == nil {
-		t.Error("sha3-256 应当返回不支持的错误")
+		t.Error("sha3-256 should return an unsupported error")
 	}
 
 	body := io.NopCloser(strings.NewReader("<metadata/>"))
 	if _, err := withVerification(body, &RepoMDData{
 		OpenChecksum: Checksum{Type: "sha3-256", Value: "00"},
-	}, true); err == nil || !strings.Contains(err.Error(), "不支持的校验算法") {
-		t.Errorf("错误为 %v，期望不支持的校验算法", err)
+	}, true); err == nil || !strings.Contains(err.Error(), "unsupported checksum algorithm") {
+		t.Errorf("error is %v, want an unsupported checksum algorithm", err)
 	}
 
 	body = io.NopCloser(strings.NewReader("<metadata/>"))
@@ -146,25 +146,25 @@ func TestChecksumAlgorithms(t *testing.T) {
 		OpenChecksum: Checksum{Type: "sha256", Value: sha256Hex([]byte("other"))},
 	}, true)
 	if err != nil {
-		t.Fatalf("withVerification 失败: %v", err)
+		t.Fatalf("withVerification failed: %v", err)
 	}
 	if _, err := io.ReadAll(reader); err == nil {
-		t.Error("摘要不匹配时应当报错")
-	} else if !strings.Contains(err.Error(), "校验和不匹配") {
-		t.Errorf("错误为 %v，期望校验和不匹配", err)
+		t.Error("a mismatching digest should fail")
+	} else if !strings.Contains(err.Error(), "checksum mismatch") {
+		t.Errorf("error is %v, want a checksum mismatch", err)
 	}
 
-	// 未压缩的数据使用 checksum 校验。
+	// Uncompressed data is verified with checksum.
 	payload := []byte("<metadata/>")
 	body = io.NopCloser(bytes.NewReader(payload))
 	reader, err = withVerification(body, &RepoMDData{
 		Checksum: Checksum{Type: "sha256", Value: sha256Hex(payload)},
 	}, false)
 	if err != nil {
-		t.Fatalf("withVerification 失败: %v", err)
+		t.Fatalf("withVerification failed: %v", err)
 	}
 	if _, err := io.ReadAll(reader); err != nil {
-		t.Errorf("校验应当通过: %v", err)
+		t.Errorf("verification should pass: %v", err)
 	}
 }
 
@@ -178,10 +178,10 @@ func compressGzip(t *testing.T, data []byte) []byte {
 	var buffer bytes.Buffer
 	writer := gzip.NewWriter(&buffer)
 	if _, err := writer.Write(data); err != nil {
-		t.Fatalf("gzip 压缩失败: %v", err)
+		t.Fatalf("gzip compression failed: %v", err)
 	}
 	if err := writer.Close(); err != nil {
-		t.Fatalf("gzip 压缩失败: %v", err)
+		t.Fatalf("gzip compression failed: %v", err)
 	}
 	return buffer.Bytes()
 }
@@ -191,13 +191,13 @@ func compressXz(t *testing.T, data []byte) []byte {
 	var buffer bytes.Buffer
 	writer, err := xz.NewWriter(&buffer)
 	if err != nil {
-		t.Fatalf("xz 压缩失败: %v", err)
+		t.Fatalf("xz compression failed: %v", err)
 	}
 	if _, err := writer.Write(data); err != nil {
-		t.Fatalf("xz 压缩失败: %v", err)
+		t.Fatalf("xz compression failed: %v", err)
 	}
 	if err := writer.Close(); err != nil {
-		t.Fatalf("xz 压缩失败: %v", err)
+		t.Fatalf("xz compression failed: %v", err)
 	}
 	return buffer.Bytes()
 }
@@ -207,13 +207,13 @@ func compressZstd(t *testing.T, data []byte) []byte {
 	var buffer bytes.Buffer
 	writer, err := zstd.NewWriter(&buffer)
 	if err != nil {
-		t.Fatalf("zstd 压缩失败: %v", err)
+		t.Fatalf("zstd compression failed: %v", err)
 	}
 	if _, err := writer.Write(data); err != nil {
-		t.Fatalf("zstd 压缩失败: %v", err)
+		t.Fatalf("zstd compression failed: %v", err)
 	}
 	if err := writer.Close(); err != nil {
-		t.Fatalf("zstd 压缩失败: %v", err)
+		t.Fatalf("zstd compression failed: %v", err)
 	}
 	return buffer.Bytes()
 }
@@ -222,7 +222,7 @@ func decodeHex(t *testing.T, value string) []byte {
 	t.Helper()
 	data, err := hex.DecodeString(value)
 	if err != nil {
-		t.Fatalf("十六进制数据非法: %v", err)
+		t.Fatalf("invalid hexadecimal data: %v", err)
 	}
 	return data
 }

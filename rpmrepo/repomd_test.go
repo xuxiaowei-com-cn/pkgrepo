@@ -7,7 +7,8 @@ import (
 	"time"
 )
 
-// 真实 repomd.xml 的解析在 realrepo_test.go 中验证，这里覆盖字段细节与错误分支。
+// Parsing of a real repomd.xml is verified in realrepo_test.go; this file covers the field details
+// and error branches.
 
 const repomdFixture = `<?xml version="1.0" encoding="UTF-8"?>
 <repomd xmlns="http://linux.duke.edu/metadata/repo" xmlns:rpm="http://linux.duke.edu/metadata/rpm">
@@ -32,50 +33,50 @@ const repomdFixture = `<?xml version="1.0" encoding="UTF-8"?>
 func TestParseRepoMDFields(t *testing.T) {
 	repomd, err := ParseRepoMD(strings.NewReader(repomdFixture))
 	if err != nil {
-		t.Fatalf("ParseRepoMD 失败: %v", err)
+		t.Fatalf("ParseRepoMD failed: %v", err)
 	}
 	if repomd.Revision != "1700000000" {
-		t.Errorf("revision 为 %q", repomd.Revision)
+		t.Errorf("revision is %q", repomd.Revision)
 	}
 	if got := strings.Join(repomd.Types(), ","); got != "primary,primary_db" {
-		t.Errorf("元数据类型为 %q", got)
+		t.Errorf("metadata types are %q", got)
 	}
 
 	primary, err := repomd.Primary()
 	if err != nil {
-		t.Fatalf("Primary 失败: %v", err)
+		t.Fatalf("Primary failed: %v", err)
 	}
 	if primary.Checksum.Value != "aaa" || primary.OpenChecksum.Value != "bbb" {
-		t.Errorf("primary 校验值不符合预期: %+v", primary)
+		t.Errorf("unexpected primary checksums: %+v", primary)
 	}
 	if primary.Size != 42531 || primary.OpenSize != 883960 {
-		t.Errorf("primary 大小不符合预期: size=%d open-size=%d", primary.Size, primary.OpenSize)
+		t.Errorf("unexpected primary sizes: size=%d open-size=%d", primary.Size, primary.OpenSize)
 	}
 	if got, want := primary.Timestamp.Time(), time.Unix(1700000000, 0).UTC(); !got.Equal(want) {
-		t.Errorf("primary 时间为 %v，期望 %v", got, want)
+		t.Errorf("primary time is %v, want %v", got, want)
 	}
 
-	// 类型名不区分大小写。
+	// Type names are case-insensitive.
 	primaryDB, ok := repomd.DataByType("PRIMARY_DB")
 	if !ok {
-		t.Fatal("没有找到 primary_db 元数据")
+		t.Fatal("primary_db metadata was not found")
 	}
 	if primaryDB.DatabaseVersion != "10" {
-		t.Errorf("database_version 为 %q，期望 10", primaryDB.DatabaseVersion)
+		t.Errorf("database_version is %q, want 10", primaryDB.DatabaseVersion)
 	}
 	if primaryDB.OpenChecksum.Value != "" {
-		t.Errorf("primary_db 不应有 open-checksum: %+v", primaryDB.OpenChecksum)
+		t.Errorf("primary_db should not have an open-checksum: %+v", primaryDB.OpenChecksum)
 	}
 	if got, want := primaryDB.Timestamp.Time(), time.Unix(1700000100, 0).UTC(); !got.Equal(want) {
-		t.Errorf("primary_db 时间为 %v，期望 %v", got, want)
+		t.Errorf("primary_db time is %v, want %v", got, want)
 	}
 	if primaryDB.Timestamp.IsZero() {
-		t.Error("时间戳不应为 0")
+		t.Error("the timestamp should not be 0")
 	}
 
 	checksum := primary.Checksum
 	if checksum.String() != "sha256:aaa" {
-		t.Errorf("Checksum.String() 为 %q", checksum.String())
+		t.Errorf("Checksum.String() is %q", checksum.String())
 	}
 }
 
@@ -84,37 +85,37 @@ func TestRepoMDPrimaryMissing(t *testing.T) {
 <repomd><data type="other"><location href="repodata/other.xml.gz"/></data></repomd>`
 	repomd, err := ParseRepoMD(strings.NewReader(document))
 	if err != nil {
-		t.Fatalf("ParseRepoMD 失败: %v", err)
+		t.Fatalf("ParseRepoMD failed: %v", err)
 	}
 	if _, err := repomd.Primary(); !errors.Is(err, ErrPrimaryNotFound) {
-		t.Errorf("错误为 %v，期望 ErrPrimaryNotFound", err)
+		t.Errorf("error is %v, want ErrPrimaryNotFound", err)
 	}
 	if _, ok := repomd.DataByType(DataTypePrimary); ok {
-		t.Error("不应找到 primary 元数据")
+		t.Error("primary metadata should not be found")
 	}
 }
 
 func TestUnixTimeErrors(t *testing.T) {
 	const document = `<?xml version="1.0" encoding="UTF-8"?>
-<repomd><data type="primary"><timestamp>不是时间</timestamp>
+<repomd><data type="primary"><timestamp>not a time</timestamp>
 <location href="repodata/primary.xml.gz"/></data></repomd>`
 	if _, err := ParseRepoMD(strings.NewReader(document)); err == nil {
-		t.Fatal("非法时间戳应当报错")
+		t.Fatal("an invalid timestamp should fail")
 	}
 }
 
 func TestUnixTimeFormat(t *testing.T) {
 	stamp := UnixTime(1700000000)
 	if got, want := stamp.String(), time.Unix(1700000000, 0).UTC().Format(time.RFC3339); got != want {
-		t.Errorf("UnixTime.String() 为 %q，期望 %q", got, want)
+		t.Errorf("UnixTime.String() is %q, want %q", got, want)
 	}
 	if !UnixTime(0).IsZero() || UnixTime(0).String() != "" {
-		t.Error("零值时间戳应当判定为空并输出空字符串")
+		t.Error("a zero timestamp should be reported as empty and print an empty string")
 	}
 	if data, err := UnixTime(1700000000).MarshalJSON(); err != nil || string(data) != `"2023-11-14T22:13:20Z"` {
-		t.Errorf("MarshalJSON 输出 %s（err=%v）", data, err)
+		t.Errorf("MarshalJSON output %s (err=%v)", data, err)
 	}
 	if data, err := UnixTime(0).MarshalJSON(); err != nil || string(data) != "null" {
-		t.Errorf("零值的 MarshalJSON 输出 %s（err=%v）", data, err)
+		t.Errorf("MarshalJSON output of a zero value is %s (err=%v)", data, err)
 	}
 }

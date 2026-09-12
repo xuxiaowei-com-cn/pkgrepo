@@ -6,10 +6,11 @@ import (
 	"io"
 )
 
-// ParsePrimary 流式解析 primary.xml，每解析出一个软件包就调用一次 fn。
+// ParsePrimary streams over primary.xml, calling fn once per parsed package.
 //
-// fn 返回的错误会中止解析并原样返回，便于在遍历过程中提前退出。
-// 由于是流式解析，即使仓库有几十万个包，内存占用也保持不变。
+// An error returned by fn stops parsing and is returned unchanged, which makes it easy to exit the
+// iteration early. Because parsing is streaming, memory usage stays constant even for repositories
+// with hundreds of thousands of packages.
 func ParsePrimary(r io.Reader, fn func(*Package) error) error {
 	if fn == nil {
 		return nil
@@ -22,7 +23,7 @@ func ParsePrimary(r io.Reader, fn func(*Package) error) error {
 			return nil
 		}
 		if err != nil {
-			return fmt.Errorf("rpmrepo: 解析 primary.xml 失败: %w", err)
+			return fmt.Errorf("rpmrepo: parsing primary.xml failed: %w", err)
 		}
 		start, ok := token.(xml.StartElement)
 		if !ok || start.Name.Local != "package" {
@@ -30,7 +31,7 @@ func ParsePrimary(r io.Reader, fn func(*Package) error) error {
 		}
 		var pkg Package
 		if err := dec.DecodeElement(&pkg, &start); err != nil {
-			return fmt.Errorf("rpmrepo: 解析 primary.xml 中的软件包失败: %w", err)
+			return fmt.Errorf("rpmrepo: parsing a package in primary.xml failed: %w", err)
 		}
 		if err := fn(&pkg); err != nil {
 			return err
@@ -38,23 +39,24 @@ func ParsePrimary(r io.Reader, fn func(*Package) error) error {
 	}
 }
 
-// PrimaryMeta 是 primary.xml 根元素上的统计信息。
+// PrimaryMeta holds the statistics found on the root element of primary.xml.
 type PrimaryMeta struct {
-	// Packages 是仓库中的软件包总数。
+	// Packages is the total number of packages in the repository.
 	Packages int
 }
 
-// ParsePrimaryMeta 只读取 primary.xml 根元素的属性，不解析软件包。
+// ParsePrimaryMeta reads only the attributes of the root element of primary.xml and does not parse
+// any packages.
 func ParsePrimaryMeta(r io.Reader) (*PrimaryMeta, error) {
 	dec := xml.NewDecoder(r)
 	dec.CharsetReader = charsetReader
 	for {
 		token, err := dec.Token()
 		if err == io.EOF {
-			return nil, fmt.Errorf("rpmrepo: primary.xml 中缺少 metadata 元素")
+			return nil, fmt.Errorf("rpmrepo: primary.xml is missing the metadata element")
 		}
 		if err != nil {
-			return nil, fmt.Errorf("rpmrepo: 解析 primary.xml 失败: %w", err)
+			return nil, fmt.Errorf("rpmrepo: parsing primary.xml failed: %w", err)
 		}
 		start, ok := token.(xml.StartElement)
 		if !ok || start.Name.Local != "metadata" {
@@ -66,7 +68,7 @@ func ParsePrimaryMeta(r io.Reader) (*PrimaryMeta, error) {
 				continue
 			}
 			if _, err := fmt.Sscanf(attr.Value, "%d", &meta.Packages); err != nil {
-				return nil, fmt.Errorf("rpmrepo: primary.xml 的 packages 属性非法 %q: %w", attr.Value, err)
+				return nil, fmt.Errorf("rpmrepo: invalid packages attribute %q in primary.xml: %w", attr.Value, err)
 			}
 		}
 		return meta, nil

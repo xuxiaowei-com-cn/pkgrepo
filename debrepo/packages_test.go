@@ -45,7 +45,7 @@ Description-md5: a1b2c3d4e5f60718293a4b5c6d7e8f90
 func TestParsePackage(t *testing.T) {
 	pkg, err := ParsePackageStanza(mustStanza(t, packageSample))
 	if err != nil {
-		t.Fatalf("ParsePackageStanza 失败: %v", err)
+		t.Fatalf("ParsePackageStanza failed: %v", err)
 	}
 	if pkg.Name != "nginx" {
 		t.Errorf("Name = %q", pkg.Name)
@@ -60,13 +60,13 @@ func TestParsePackage(t *testing.T) {
 		t.Errorf("Architecture/MultiArch = %q/%q", pkg.Architecture, pkg.MultiArch)
 	}
 	if pkg.Essential {
-		t.Error("Essential 应当为 false")
+		t.Error("Essential should be false")
 	}
 	if pkg.Section != "httpd" || pkg.Priority != "optional" {
 		t.Errorf("Section/Priority = %q/%q", pkg.Section, pkg.Priority)
 	}
 	if pkg.Maintainer == "" || !strings.Contains(pkg.OriginalMaintainer, "Nginx Maintainers") {
-		t.Errorf("Maintainer = %q，OriginalMaintainer = %q", pkg.Maintainer, pkg.OriginalMaintainer)
+		t.Errorf("Maintainer = %q, OriginalMaintainer = %q", pkg.Maintainer, pkg.OriginalMaintainer)
 	}
 	if pkg.Homepage != "https://nginx.org" {
 		t.Errorf("Homepage = %q", pkg.Homepage)
@@ -86,7 +86,7 @@ func TestParsePackage(t *testing.T) {
 	wantLong := "Nginx (\"engine X\") is a high-performance web and reverse proxy server.\n" +
 		"It can also be used as a mail proxy server.\n\nThis package provides the nginx binary."
 	if pkg.Description.Long != wantLong {
-		t.Errorf("Description.Long = %q，期望 %q", pkg.Description.Long, wantLong)
+		t.Errorf("Description.Long = %q, want %q", pkg.Description.Long, wantLong)
 	}
 	if !strings.HasPrefix(pkg.Description.String(), pkg.Description.Synopsis) {
 		t.Errorf("Description.String() = %q", pkg.Description.String())
@@ -101,7 +101,7 @@ func TestParsePackage(t *testing.T) {
 		t.Errorf("ID() = %q", pkg.ID())
 	}
 	if pkg.IsArchitectureIndependent() {
-		t.Error("amd64 包不应被视为架构无关包")
+		t.Error("an amd64 package should not be treated as architecture-independent")
 	}
 	if pkg.SourceName() != "nginx" {
 		t.Errorf("SourceName() = %q", pkg.SourceName())
@@ -110,23 +110,23 @@ func TestParsePackage(t *testing.T) {
 		t.Errorf("Field(Description-md5) = %q", got)
 	}
 	if !pkg.HasField("tag") || pkg.HasField("no-such-field") {
-		t.Errorf("HasField 判断错误")
+		t.Errorf("HasField returned a wrong result")
 	}
 }
 
 func TestPackageDependencies(t *testing.T) {
 	pkg, err := ParsePackageStanza(mustStanza(t, packageSample))
 	if err != nil {
-		t.Fatalf("ParsePackageStanza 失败: %v", err)
+		t.Fatalf("ParsePackageStanza failed: %v", err)
 	}
 	if len(pkg.Depends) != 3 {
-		t.Fatalf("Depends 数量 = %d，期望 3", len(pkg.Depends))
+		t.Fatalf("Depends count = %d, want 3", len(pkg.Depends))
 	}
 	if !pkg.DependsOn("libc6") || pkg.DependsOn("libssl1.1") {
-		t.Errorf("DependsOn 判断错误: %v", pkg.Depends.Names())
+		t.Errorf("DependsOn returned a wrong result: %v", pkg.Depends.Names())
 	}
 	if !pkg.ProvidesPackage("httpd") || pkg.ProvidesPackage("postfix") {
-		t.Errorf("ProvidesPackage 判断错误: %v", pkg.Provides.Names())
+		t.Errorf("ProvidesPackage returned a wrong result: %v", pkg.Provides.Names())
 	}
 	if !pkg.PreDepends.Has("dpkg") {
 		t.Errorf("PreDepends = %v", pkg.PreDepends)
@@ -136,15 +136,16 @@ func TestPackageDependencies(t *testing.T) {
 	}
 	if !pkg.Conflicts.Has("nginx-extras") || !pkg.Replaces.Has("nginx-common") ||
 		!pkg.Breaks.Has("nginx-core") || !pkg.Enhances.Has("libnginx-mod-http-geoip2") {
-		t.Errorf("其它依赖字段解析错误")
+		t.Errorf("another dependency field was parsed incorrectly")
 	}
-	// 依赖的版本约束应当被保留，且 epoch 形式（1:4.4.10-10）不能被破坏。
+	// The version constraint of the dependency must be preserved, and the epoch form
+	// (1:4.4.10-10) must not be damaged.
 	dep, ok := pkg.Depends.Find("libcrypt1")
 	if !ok {
-		t.Fatal("应当能找到 libcrypt1 依赖")
+		t.Fatal("the libcrypt1 dependency should be found")
 	}
 	if dep.Alternatives[0].Operator != ">=" || dep.Alternatives[0].Version != "1:4.4.10-10" {
-		t.Errorf("libcrypt1 依赖 = %+v", dep.Alternatives[0])
+		t.Errorf("libcrypt1 dependency = %+v", dep.Alternatives[0])
 	}
 }
 
@@ -156,53 +157,53 @@ func TestParsePackagesStreaming(t *testing.T) {
 		return nil
 	})
 	if err != nil {
-		t.Fatalf("ParsePackages 失败: %v", err)
+		t.Fatalf("ParsePackages failed: %v", err)
 	}
 	if strings.Join(names, ",") != "nginx,nginx-doc" {
-		t.Errorf("解析结果 = %v", names)
+		t.Errorf("parse result = %v", names)
 	}
 
-	// fn 返回的错误应当中止解析并原样返回。
-	sentinel := errors.New("停止解析")
+	// An error returned by fn should stop parsing and be returned unchanged.
+	sentinel := errors.New("stop parsing")
 	count := 0
 	err = ParsePackages(strings.NewReader(data), func(*Package) error {
 		count++
 		return sentinel
 	})
 	if !errors.Is(err, sentinel) {
-		t.Errorf("错误 = %v，期望 %v", err, sentinel)
+		t.Errorf("error = %v, want %v", err, sentinel)
 	}
 	if count != 1 {
-		t.Errorf("解析了 %d 个包，期望 1", count)
+		t.Errorf("parsed %d packages, want 1", count)
 	}
 }
 
 func TestParsePackageErrors(t *testing.T) {
 	if _, err := ParsePackageStanza(mustStanza(t, "Version: 1.0\n")); !errors.Is(err, ErrInvalidPackage) {
-		t.Errorf("缺少 Package 字段应当返回 ErrInvalidPackage，实际 %v", err)
+		t.Errorf("a missing Package field should return ErrInvalidPackage, got %v", err)
 	}
-	if _, err := ParsePackageStanza(mustStanza(t, "Package: a\nSize: 很大\n")); !errors.Is(err, ErrInvalidPackage) {
-		t.Errorf("非法 Size 应当返回 ErrInvalidPackage，实际 %v", err)
+	if _, err := ParsePackageStanza(mustStanza(t, "Package: a\nSize: huge\n")); !errors.Is(err, ErrInvalidPackage) {
+		t.Errorf("an invalid Size should return ErrInvalidPackage, got %v", err)
 	}
 	if _, err := ParsePackageStanza(mustStanza(t, "Package: a\nDepends: libc6 (>=\n")); !errors.Is(err, ErrInvalidPackage) {
-		t.Errorf("非法 Depends 应当返回 ErrInvalidPackage，实际 %v", err)
+		t.Errorf("an invalid Depends should return ErrInvalidPackage, got %v", err)
 	}
 	if _, err := ParsePackageStanza(mustStanza(t, "Package: a\nVersion: :1.0\n")); !errors.Is(err, ErrInvalidPackage) {
-		t.Errorf("非法 Version 应当返回 ErrInvalidPackage，实际 %v", err)
+		t.Errorf("an invalid Version should return ErrInvalidPackage, got %v", err)
 	}
 }
 
 func TestPackageJSON(t *testing.T) {
 	pkg, err := ParsePackageStanza(mustStanza(t, packageSample))
 	if err != nil {
-		t.Fatalf("ParsePackageStanza 失败: %v", err)
+		t.Fatalf("ParsePackageStanza failed: %v", err)
 	}
 	pkg.Component = "main"
 	pkg.Suite = "bookworm"
 	pkg.DownloadURL = "https://repo.test/debian/" + pkg.Filename
 	data, err := json.Marshal(pkg)
 	if err != nil {
-		t.Fatalf("Marshal 失败: %v", err)
+		t.Fatalf("Marshal failed: %v", err)
 	}
 	var decoded struct {
 		Name         string   `json:"name"`
@@ -218,7 +219,7 @@ func TestPackageJSON(t *testing.T) {
 		} `json:"description"`
 	}
 	if err := json.Unmarshal(data, &decoded); err != nil {
-		t.Fatalf("Unmarshal 失败: %v", err)
+		t.Fatalf("Unmarshal failed: %v", err)
 	}
 	if decoded.Name != "nginx" || decoded.Version != "1:1.22.1-9~deb12u1" || decoded.Architecture != "amd64" {
 		t.Errorf("JSON = %s", data)
@@ -234,15 +235,15 @@ func TestPackageJSON(t *testing.T) {
 	}
 }
 
-// mustStanza 解析单个段落，便于构造测试数据。
+// mustStanza parses a single paragraph, which makes it convenient to build test data.
 func mustStanza(t *testing.T, data string) *Stanza {
 	t.Helper()
 	stanzas, err := ParseStanzas(strings.NewReader(data))
 	if err != nil {
-		t.Fatalf("解析测试数据失败: %v", err)
+		t.Fatalf("parsing the test data failed: %v", err)
 	}
 	if len(stanzas) != 1 {
-		t.Fatalf("测试数据应当只有 1 个段落，实际 %d", len(stanzas))
+		t.Fatalf("the test data should contain exactly 1 paragraph, got %d", len(stanzas))
 	}
 	return &stanzas[0]
 }

@@ -1,10 +1,11 @@
-// Command rpmrepo 是一个查询 RPM 仓库的命令行工具，用来演示与排查 rpmrepo SDK。
+// Command rpmrepo is a command-line tool for querying RPM repositories, used to demonstrate and
+// troubleshoot the rpmrepo SDK.
 //
-// 用法示例：
+// Usage examples:
 //
 //	rpmrepo packages https://download.docker.com/linux/centos/7/x86_64/stable docker-ce
-//	rpmrepo packages --arch x86_64 --latest --json <仓库地址> docker-ce
-//	rpmrepo repomd <仓库地址>
+//	rpmrepo packages --arch x86_64 --latest --json <repository URL> docker-ce
+//	rpmrepo repomd <repository URL>
 package main
 
 import (
@@ -22,7 +23,7 @@ import (
 
 func main() {
 	if err := run(os.Args[1:]); err != nil {
-		fmt.Fprintln(os.Stderr, "错误:", err)
+		fmt.Fprintln(os.Stderr, "error:", err)
 		os.Exit(1)
 	}
 }
@@ -30,7 +31,7 @@ func main() {
 func run(args []string) error {
 	if len(args) == 0 {
 		usage()
-		return errors.New("缺少子命令")
+		return errors.New("missing subcommand")
 	}
 	switch args[0] {
 	case "packages", "list":
@@ -42,30 +43,30 @@ func run(args []string) error {
 		return nil
 	default:
 		usage()
-		return fmt.Errorf("未知子命令 %q", args[0])
+		return fmt.Errorf("unknown subcommand %q", args[0])
 	}
 }
 
 func usage() {
-	fmt.Fprint(os.Stderr, `用法:
-  rpmrepo packages [选项] <仓库地址> <软件名称>
-  rpmrepo repomd   [选项] <仓库地址>
+	fmt.Fprint(os.Stderr, `Usage:
+  rpmrepo packages [options] <repository URL> <package name>
+  rpmrepo repomd   [options] <repository URL>
 
-子命令:
-  packages  查询指定软件（名称支持 * ? [abc] 通配符）的全部软件包
-  repomd    查看仓库元数据索引（repomd.xml）
+Subcommands:
+  packages  list all packages of the given software (the name supports the * ? [abc] wildcards)
+  repomd    show the repository metadata index (repomd.xml)
 
-选项（packages）:
-  -arch string      限定架构，例如 x86_64、noarch、src
-  -version string   限定版本号（version）
-  -latest           每个 名称+架构 只保留最新版本
-  -limit int        最多输出多少个包
-  -sort string      排序方式：default|version-asc|build-time|filename|none
-  -json             以 JSON 输出完整元数据
-  -verify           校验元数据校验和
-  -timeout duration HTTP 超时（默认 2m）
+Options (packages):
+  -arch string      restrict the architecture, for example x86_64, noarch, or src
+  -version string   restrict the version number
+  -latest           keep only the newest version of every name+architecture
+  -limit int        maximum number of packages to output
+  -sort string      sort order: default|version-asc|build-time|filename|none
+  -json             output the complete metadata as JSON
+  -verify           verify metadata checksums
+  -timeout duration HTTP timeout (default 2m)
 
-示例:
+Examples:
   rpmrepo packages https://download.docker.com/linux/centos/7/x86_64/stable docker-ce
   rpmrepo packages -arch x86_64 -latest -json https://download.docker.com/linux/centos/7/x86_64/stable docker-ce
 `)
@@ -73,20 +74,20 @@ func usage() {
 
 func runPackages(args []string) error {
 	flags := flag.NewFlagSet("packages", flag.ContinueOnError)
-	arch := flags.String("arch", "", "限定架构")
-	version := flags.String("version", "", "限定版本号")
-	latest := flags.Bool("latest", false, "只保留最新版本")
-	limit := flags.Int("limit", 0, "最多输出多少个包")
-	sortBy := flags.String("sort", "default", "排序方式")
-	asJSON := flags.Bool("json", false, "以 JSON 输出")
-	verify := flags.Bool("verify", false, "校验元数据校验和")
-	timeout := flags.Duration("timeout", 2*time.Minute, "HTTP 超时")
+	arch := flags.String("arch", "", "restrict the architecture")
+	version := flags.String("version", "", "restrict the version number")
+	latest := flags.Bool("latest", false, "keep only the newest version")
+	limit := flags.Int("limit", 0, "maximum number of packages to output")
+	sortBy := flags.String("sort", "default", "sort order")
+	asJSON := flags.Bool("json", false, "output as JSON")
+	verify := flags.Bool("verify", false, "verify metadata checksums")
+	timeout := flags.Duration("timeout", 2*time.Minute, "HTTP timeout")
 	if err := flags.Parse(args); err != nil {
 		return err
 	}
 	if flags.NArg() != 2 {
 		usage()
-		return errors.New("packages 子命令需要 <仓库地址> 与 <软件名称> 两个参数")
+		return errors.New("the packages subcommand requires both <repository URL> and <package name>")
 	}
 	repoURL, name := flags.Arg(0), flags.Arg(1)
 
@@ -121,9 +122,9 @@ func runPackages(args []string) error {
 		return encoder.Encode(pkgs)
 	}
 
-	fmt.Fprintf(os.Stderr, "共 %d 个软件包（仓库 %s，revision %s）\n", len(pkgs), repo.ID, repo.Revision)
+	fmt.Fprintf(os.Stderr, "%d packages (repository %s, revision %s)\n", len(pkgs), repo.ID, repo.Revision)
 	writer := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(writer, "NEVRA\t大小\t构建时间\t指纹\t下载地址")
+	fmt.Fprintln(writer, "NEVRA\tSIZE\tBUILD TIME\tCHECKSUM\tDOWNLOAD URL")
 	for i := range pkgs {
 		pkg := &pkgs[i]
 		build := "-"
@@ -138,14 +139,14 @@ func runPackages(args []string) error {
 
 func runRepoMD(args []string) error {
 	flags := flag.NewFlagSet("repomd", flag.ContinueOnError)
-	asJSON := flags.Bool("json", false, "以 JSON 输出")
-	timeout := flags.Duration("timeout", 2*time.Minute, "HTTP 超时")
+	asJSON := flags.Bool("json", false, "output as JSON")
+	timeout := flags.Duration("timeout", 2*time.Minute, "HTTP timeout")
 	if err := flags.Parse(args); err != nil {
 		return err
 	}
 	if flags.NArg() != 1 {
 		usage()
-		return errors.New("repomd 子命令需要 <仓库地址> 一个参数")
+		return errors.New("the repomd subcommand requires a single <repository URL> argument")
 	}
 	repo, err := rpmrepo.Open(context.Background(), flags.Arg(0), rpmrepo.WithTimeout(*timeout))
 	if err != nil {
@@ -157,9 +158,9 @@ func runRepoMD(args []string) error {
 		return encoder.Encode(repo.RepoMD)
 	}
 
-	fmt.Printf("仓库: %s\nrevision: %s\n", repo.URL, repo.Revision)
+	fmt.Printf("repository: %s\nrevision: %s\n", repo.URL, repo.Revision)
 	writer := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(writer, "类型\t压缩\t大小\t解压后\t生成时间\t地址")
+	fmt.Fprintln(writer, "TYPE\tCOMPRESSION\tSIZE\tOPEN SIZE\tTIMESTAMP\tLOCATION")
 	for i := range repo.RepoMD.Data {
 		data := &repo.RepoMD.Data[i]
 		generated := "-"
@@ -186,7 +187,7 @@ func parseSortOrder(name string) (rpmrepo.SortOrder, error) {
 	case "none":
 		return rpmrepo.SortNone, nil
 	default:
-		return 0, fmt.Errorf("未知排序方式 %q", name)
+		return 0, fmt.Errorf("unknown sort order %q", name)
 	}
 }
 

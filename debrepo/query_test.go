@@ -53,7 +53,7 @@ func TestQueryMatch(t *testing.T) {
 			}
 		}
 		if len(matched) != len(tc.want) {
-			t.Errorf("Query.Match(%+v) 匹配 %d 个包，期望 %d", tc.query, len(matched), len(tc.want))
+			t.Errorf("Query.Match(%+v) matched %d packages, want %d", tc.query, len(matched), len(tc.want))
 		}
 	}
 }
@@ -68,20 +68,20 @@ func TestQueryProvidesAndEssential(t *testing.T) {
 	}
 	essential := Package{Name: "bash", Version: MustParseVersion("5.2.15-2"), Essential: true}
 	if !(Query{Provides: "httpd"}).Match(&nginx) {
-		t.Error("Provide 查找应当匹配 httpd")
+		t.Error("the Provides lookup should match httpd")
 	}
 	if (Query{Provides: "httpd-server"}).Match(&nginx) {
-		t.Error("Provide 查找不应匹配 httpd-server")
+		t.Error("the Provides lookup should not match httpd-server")
 	}
 	if !(Query{Provides: "*"}).Match(&nginx) {
-		t.Error("通配符 Provide 查找应当匹配")
+		t.Error("a wildcard Provides lookup should match")
 	}
 	yes, no := true, false
 	if !(Query{Essential: &yes}).Match(&essential) || (Query{Essential: &yes}).Match(&nginx) {
-		t.Error("Essential=true 过滤错误")
+		t.Error("Essential=true filtering returned a wrong result")
 	}
 	if !(Query{Essential: &no}).Match(&nginx) || (Query{Essential: &no}).Match(&essential) {
-		t.Error("Essential=false 过滤错误")
+		t.Error("Essential=false filtering returned a wrong result")
 	}
 }
 
@@ -98,7 +98,7 @@ func TestQuerySortAndLatest(t *testing.T) {
 	}
 	want := "1.24.0-1/amd64,1.24.0-1/arm64,1.22.1-9/amd64,1.20.0-1/amd64"
 	if got := strings.Join(order, ","); got != want {
-		t.Errorf("默认排序 = %q，期望 %q", got, want)
+		t.Errorf("default sort = %q, want %q", got, want)
 	}
 
 	latest := retainLatest(testPackages())
@@ -108,25 +108,25 @@ func TestQuerySortAndLatest(t *testing.T) {
 	}
 	wantLatest := "nginx_amd64,nginx_arm64,nginx-doc_all,curl_amd64,docker-ce_amd64"
 	if got := strings.Join(latestNames, ","); got != wantLatest {
-		t.Errorf("Latest 结果 = %q，期望 %q", got, wantLatest)
+		t.Errorf("Latest result = %q, want %q", got, wantLatest)
 	}
 
 	ascending := testPackages()
 	Query{Sort: SortVersionAsc}.sort(ascending)
 	if ascending[0].Name != "curl" {
-		t.Errorf("版本升序第一个包 = %q", ascending[0].Name)
+		t.Errorf("the first package in version-ascending order = %q", ascending[0].Name)
 	}
 
 	bySize := testPackages()
 	Query{Sort: SortSizeDesc}.sort(bySize)
 	if bySize[0].Size.File < bySize[len(bySize)-1].Size.File {
-		t.Error("SortSizeDesc 排序错误")
+		t.Error("SortSizeDesc sorted incorrectly")
 	}
 
 	original := testPackages()
 	Query{Sort: SortNone}.sort(original)
 	if original[0].Version.String() != "1.22.1-9" {
-		t.Errorf("SortNone 不应改变顺序，实际 %q", original[0].Version.String())
+		t.Errorf("SortNone should not change the order, got %q", original[0].Version.String())
 	}
 }
 
@@ -134,10 +134,10 @@ func TestQueryFilter(t *testing.T) {
 	pkg := Package{Name: "nginx", Version: MustParseVersion("1.24.0-1")}
 	query := Query{Name: "nginx", Filter: func(p *Package) bool { return p.Name != "nginx" }}
 	if query.Match(&pkg) {
-		t.Error("Filter 返回 false 时不应匹配")
+		t.Error("nothing should match when Filter returns false")
 	}
 	if (Query{}).Match(nil) {
-		t.Error("nil 包不应匹配")
+		t.Error("a nil package should not match")
 	}
 }
 
@@ -156,15 +156,15 @@ func TestSourceQuery(t *testing.T) {
 	}
 	matched = retainLatestSources(matched)
 	if len(matched) != 1 || matched[0].Version.String() != "1.24.0-1" {
-		t.Errorf("Latest 源码包 = %+v", matched)
+		t.Errorf("Latest source package = %+v", matched)
 	}
 	if !(SourceQuery{Name: "ng*", Section: "http*"}).Match(&sources[0]) {
-		t.Error("源码包通配符匹配失败")
+		t.Error("wildcard matching of the source package failed")
 	}
 	if (SourceQuery{Section: "web"}).Match(&sources[0]) {
-		t.Error("源码包 Section 过滤失败")
+		t.Error("Section filtering of the source package failed")
 	}
 	if (SourceQuery{}).Match(nil) {
-		t.Error("nil 源码包不应匹配")
+		t.Error("a nil source package should not match")
 	}
 }

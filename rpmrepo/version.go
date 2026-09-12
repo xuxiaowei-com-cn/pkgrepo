@@ -5,19 +5,22 @@ import (
 	"strings"
 )
 
-// CompareVersions 使用 RPM 的版本比较规则（rpmvercmp）比较两个版本字符串，
-// 小于 0 表示 a 小于 b，等于 0 表示相等，大于 0 表示 a 大于 b。
+// CompareVersions compares two version strings using the RPM version comparison rules (rpmvercmp):
+// a result less than 0 means a is older than b, 0 means they are equal, and a result greater than 0
+// means a is newer than b.
 //
-// 与 rpm/dnf 保持一致的关键行为：
+// The key behaviors that keep it consistent with rpm/dnf:
 //
-//   - 数字段按数值比较，字母段按字典序比较，数字段总是比字母段新（"1.1" > "1.a"）；
-//   - 分隔符不参与比较，"1.0"、"1-0"、"1_0" 视为相等；
-//   - "~" 排在所有内容之前（预发布），"1.0~rc1" < "1.0"；
-//   - "^" 排在空字符串之后、其他字符之前，"1.0" < "1.0^" < "1.0.1"。
+//   - Numeric segments are compared by value and alphabetic segments lexicographically; a numeric
+//     segment is always newer than an alphabetic one ("1.1" > "1.a").
+//   - Separators do not participate in the comparison, so "1.0", "1-0", and "1_0" are equal.
+//   - "~" sorts before everything else (pre-release), so "1.0~rc1" < "1.0".
+//   - "^" sorts after the empty string and before other characters, so
+//     "1.0" < "1.0^" < "1.0.1".
 func CompareVersions(a, b string) int {
 	i, j := 0, 0
 	for i < len(a) || j < len(b) {
-		// 跳过分隔符；"~" 与 "^" 具有比较语义，不能跳过。
+		// Skip separators; "~" and "^" carry comparison semantics and must not be skipped.
 		for i < len(a) && !isAlnum(a[i]) && a[i] != '~' && a[i] != '^' {
 			i++
 		}
@@ -25,7 +28,7 @@ func CompareVersions(a, b string) int {
 			j++
 		}
 
-		// "~" 排在所有内容（包括空字符串）之前。
+		// "~" sorts before everything, including the empty string.
 		if (i < len(a) && a[i] == '~') || (j < len(b) && b[j] == '~') {
 			switch {
 			case i >= len(a) || a[i] != '~':
@@ -38,7 +41,7 @@ func CompareVersions(a, b string) int {
 			continue
 		}
 
-		// "^" 排在空字符串之后、其他字符之前。
+		// "^" sorts after the empty string and before other characters.
 		if (i < len(a) && a[i] == '^') || (j < len(b) && b[j] == '^') {
 			switch {
 			case i >= len(a):
@@ -55,7 +58,7 @@ func CompareVersions(a, b string) int {
 			continue
 		}
 
-		// 任一侧已结束，比较结束。
+		// One side is exhausted, so the comparison is over.
 		if i >= len(a) || j >= len(b) {
 			break
 		}
@@ -78,7 +81,7 @@ func CompareVersions(a, b string) int {
 			}
 		}
 
-		// 两侧段类型不同（一侧为空）：数字段总是更新。
+		// The two segments differ in type (one side is empty): a numeric segment is always newer.
 		if j == startB {
 			if numeric {
 				return 1
@@ -101,10 +104,11 @@ func CompareVersions(a, b string) int {
 	}
 }
 
-// compareSegment 比较两个同类型（同为数字或同为字母）的段。
+// compareSegment compares two segments of the same type (both numeric or both alphabetic).
 func compareSegment(a, b string, numeric bool) int {
 	if numeric {
-		// 去掉前导 0 后，位数多的更大；位数相同再按字典序比较。
+		// After trimming leading zeros, the longer value is greater; when the lengths are equal,
+		// compare lexicographically.
 		a = strings.TrimLeft(a, "0")
 		b = strings.TrimLeft(b, "0")
 		if len(a) != len(b) {
@@ -125,14 +129,14 @@ func isAlpha(c byte) bool {
 
 func isAlnum(c byte) bool { return isDigit(c) || isAlpha(c) }
 
-// EVR 是 RPM 的版本信息：Epoch（纪元）、Version（版本）、Release（发布号）。
+// EVR holds the RPM version information: Epoch, Version, and Release.
 type EVR struct {
 	Epoch   string `xml:"epoch,attr" json:"epoch"`
 	Version string `xml:"ver,attr" json:"version"`
 	Release string `xml:"rel,attr" json:"release"`
 }
 
-// EpochInt 返回 Epoch 的数值，Epoch 为空或非法时返回 0。
+// EpochInt returns the numeric value of Epoch, or 0 when Epoch is empty or invalid.
 func (e EVR) EpochInt() int {
 	if e.Epoch == "" {
 		return 0
@@ -144,7 +148,8 @@ func (e EVR) EpochInt() int {
 	return n
 }
 
-// String 返回 "epoch:version-release"，Epoch 为 0、Release 为空时省略对应部分。
+// String returns "epoch:version-release", omitting the epoch when it is 0 and the release when it is
+// empty.
 func (e EVR) String() string {
 	var sb strings.Builder
 	if e.Epoch != "" && e.EpochInt() != 0 {
@@ -159,7 +164,7 @@ func (e EVR) String() string {
 	return sb.String()
 }
 
-// Compare 按 RPM 规则比较版本：先比较 Epoch，再比较 Version，最后比较 Release。
+// Compare compares versions by the RPM rules: Epoch first, then Version, and finally Release.
 func (e EVR) Compare(o EVR) int {
 	if c := compareEpoch(e.EpochInt(), o.EpochInt()); c != 0 {
 		return c

@@ -6,54 +6,57 @@ import (
 )
 
 var (
-	// ErrNotRepository 表示给定的地址不是有效的 deb 仓库（读不到 Release/InRelease）。
-	ErrNotRepository = errors.New("debrepo: 不是有效的 deb 仓库，无法读取 Release/InRelease")
+	// ErrNotRepository indicates that the given address is not a valid deb repository
+	// (Release/InRelease cannot be read).
+	ErrNotRepository = errors.New("debrepo: not a valid deb repository, cannot read Release/InRelease")
 
-	// ErrSuiteRequired 表示没有指定发行版 suite。
-	// suite 可以是套件名（stable、testing），也可以是代号（bookworm、jammy）。
-	ErrSuiteRequired = errors.New("debrepo: 未指定发行版 suite，请使用 debrepo.WithSuite 指定（例如 bookworm、jammy、stable）")
+	// ErrSuiteRequired indicates that no distribution suite was specified.
+	// The suite can be a suite name (stable, testing) or a codename (bookworm, jammy).
+	ErrSuiteRequired = errors.New("debrepo: no distribution suite specified, use debrepo.WithSuite (for example bookworm, jammy, stable)")
 
-	// ErrIndexNotFound 表示仓库中找不到可用的 Packages 或 Sources 索引。
-	ErrIndexNotFound = errors.New("debrepo: 仓库中找不到 Packages/Sources 索引")
+	// ErrIndexNotFound indicates that no usable Packages or Sources index was found in the repository.
+	ErrIndexNotFound = errors.New("debrepo: no Packages/Sources index found in the repository")
 
-	// ErrUnsupportedCompression 表示索引使用了不支持的压缩格式。
-	ErrUnsupportedCompression = errors.New("debrepo: 不支持的索引压缩格式")
+	// ErrUnsupportedCompression indicates that the index uses an unsupported compression format.
+	ErrUnsupportedCompression = errors.New("debrepo: unsupported index compression format")
 
-	// ErrUnsupportedChecksum 表示索引使用了不支持的校验算法。
-	ErrUnsupportedChecksum = errors.New("debrepo: 不支持的校验算法")
+	// ErrUnsupportedChecksum indicates that the index uses an unsupported checksum algorithm.
+	ErrUnsupportedChecksum = errors.New("debrepo: unsupported checksum algorithm")
 
-	// ErrChecksumMismatch 表示索引校验和不匹配（可能下载不完整或被篡改）。
-	ErrChecksumMismatch = errors.New("debrepo: 索引校验和不匹配")
+	// ErrChecksumMismatch indicates that the index checksum does not match (the download may be
+	// incomplete or tampered with).
+	ErrChecksumMismatch = errors.New("debrepo: index checksum mismatch")
 
-	// ErrPackageNotFound 表示仓库中没有匹配的软件包，由 FindPackage 返回。
-	ErrPackageNotFound = errors.New("debrepo: 未找到匹配的软件包")
+	// ErrPackageNotFound indicates that the repository has no matching package; it is returned by
+	// FindPackage.
+	ErrPackageNotFound = errors.New("debrepo: matching package not found")
 
-	// ErrInvalidVersion 表示 Debian 版本号非法。
-	ErrInvalidVersion = errors.New("debrepo: 非法的 Debian 版本号")
+	// ErrInvalidVersion indicates an invalid Debian version number.
+	ErrInvalidVersion = errors.New("debrepo: invalid Debian version number")
 
-	// ErrInvalidControl 表示 deb822（control）数据非法。
-	ErrInvalidControl = errors.New("debrepo: 非法的 deb822 控制文件")
+	// ErrInvalidControl indicates invalid deb822 (control) data.
+	ErrInvalidControl = errors.New("debrepo: invalid deb822 control file")
 
-	// ErrInvalidRelation 表示依赖关系表达式非法。
-	ErrInvalidRelation = errors.New("debrepo: 非法的依赖关系")
+	// ErrInvalidRelation indicates an invalid dependency relation expression.
+	ErrInvalidRelation = errors.New("debrepo: invalid dependency relation")
 
-	// ErrInvalidPackage 表示 Packages/Sources 条目缺少必须字段。
-	ErrInvalidPackage = errors.New("debrepo: 非法的软件包条目")
+	// ErrInvalidPackage indicates that a Packages/Sources entry is missing a required field.
+	ErrInvalidPackage = errors.New("debrepo: invalid package entry")
 )
 
-// HTTPError 表示 HTTP 请求返回了非 2xx 状态码。
+// HTTPError indicates that an HTTP request returned a non-2xx status code.
 type HTTPError struct {
-	// URL 是请求地址。
+	// URL is the request address.
 	URL string
-	// StatusCode 是 HTTP 状态码。
+	// StatusCode is the HTTP status code.
 	StatusCode int
-	// Status 是状态行，例如 "404 Not Found"。
+	// Status is the status line, for example "404 Not Found".
 	Status string
 }
 
 func (e *HTTPError) Error() string {
-	return fmt.Sprintf("debrepo: 请求 %s 失败: %s", e.URL, e.Status)
+	return fmt.Sprintf("debrepo: request %s failed: %s", e.URL, e.Status)
 }
 
-// NotFound 判断错误是否为 HTTP 404（用于 by-hash 回退）。
+// NotFound reports whether the error is an HTTP 404 (used for the by-hash fallback).
 func (e *HTTPError) NotFound() bool { return e != nil && e.StatusCode == 404 }

@@ -14,7 +14,8 @@ import (
 	"github.com/ulikunitz/xz"
 )
 
-// 各压缩格式的 magic 前缀，用于按内容（而不是文件名后缀）识别格式。
+// Magic prefixes of the supported compression formats, used to detect the format by content rather
+// than by file name suffix.
 var (
 	gzipMagic      = []byte{0x1f, 0x8b}
 	bzip2Magic     = []byte{'B', 'Z', 'h'}
@@ -24,24 +25,26 @@ var (
 	lz4LegacyMagic = []byte{0x02, 0x21, 0x4c, 0x18}
 )
 
-// IndexCompressions 是索引压缩格式的优先顺序：优先下载体积最小、解压最快的格式，
-// 空字符串表示未压缩的原始索引（放在最后作为兜底）。
+// IndexCompressions is the preference order of index compression formats: formats that are smallest
+// and fastest to decompress come first, and the empty string means the uncompressed index (kept last
+// as a fallback).
 var IndexCompressions = []string{".xz", ".zst", ".gz", ".bz2", ".lz4", ""}
 
-// decompress 按 magic 自动识别压缩格式并返回解压后的读取器与格式名。
-// 未识别出压缩 magic 时按未压缩数据处理（Packages、Sources、Release 都可能是纯文本）。
+// decompress detects the compression format by magic bytes and returns a reader over the decompressed
+// data together with the format name. When no compression magic is recognized, the data is treated as
+// uncompressed (Packages, Sources, and Release can all be plain text).
 func decompress(raw io.Reader) (io.ReadCloser, string, error) {
 	buffered := bufio.NewReaderSize(raw, 4096)
 	head, err := buffered.Peek(len(xzMagic))
 	if err != nil && err != io.EOF {
-		return nil, "", fmt.Errorf("debrepo: 读取索引数据失败: %w", err)
+		return nil, "", fmt.Errorf("debrepo: reading index data failed: %w", err)
 	}
 
 	switch {
 	case bytes.HasPrefix(head, gzipMagic):
 		zr, err := gzip.NewReader(buffered)
 		if err != nil {
-			return nil, "", fmt.Errorf("debrepo: 解压 gzip 索引失败: %w", err)
+			return nil, "", fmt.Errorf("debrepo: decompressing gzip index failed: %w", err)
 		}
 		return &compoundCloser{Reader: zr, closers: []io.Closer{zr, closerOf(raw)}}, "gzip", nil
 	case bytes.HasPrefix(head, bzip2Magic):
@@ -49,13 +52,13 @@ func decompress(raw io.Reader) (io.ReadCloser, string, error) {
 	case bytes.HasPrefix(head, xzMagic):
 		xr, err := xz.NewReader(buffered)
 		if err != nil {
-			return nil, "", fmt.Errorf("debrepo: 解压 xz 索引失败: %w", err)
+			return nil, "", fmt.Errorf("debrepo: decompressing xz index failed: %w", err)
 		}
 		return &compoundCloser{Reader: xr, closers: []io.Closer{closerOf(raw)}}, "xz", nil
 	case bytes.HasPrefix(head, zstdMagic):
 		zr, err := zstd.NewReader(buffered, zstd.WithDecoderConcurrency(1), zstd.WithDecoderLowmem(true))
 		if err != nil {
-			return nil, "", fmt.Errorf("debrepo: 解压 zstd 索引失败: %w", err)
+			return nil, "", fmt.Errorf("debrepo: decompressing zstd index failed: %w", err)
 		}
 		return &compoundCloser{Reader: zr, closers: []io.Closer{zr.IOReadCloser(), closerOf(raw)}}, "zstd", nil
 	case bytes.HasPrefix(head, lz4Magic), bytes.HasPrefix(head, lz4LegacyMagic):
@@ -65,7 +68,8 @@ func decompress(raw io.Reader) (io.ReadCloser, string, error) {
 	return &compoundCloser{Reader: buffered, closers: []io.Closer{closerOf(raw)}}, "none", nil
 }
 
-// CompressionOf 根据索引文件名返回可读的压缩格式名，仅用于展示。
+// CompressionOf returns a human-readable compression format name based on the index file name; it is
+// meant for display purposes only.
 func CompressionOf(name string) string {
 	switch {
 	case strings.HasSuffix(name, ".gz"):

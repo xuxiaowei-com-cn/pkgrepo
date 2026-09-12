@@ -8,8 +8,9 @@ import (
 	"github.com/xuxiaowei-com-cn/pkgrepo/rpmrepo"
 )
 
-// ExampleListPackages 演示按仓库地址与软件名称返回软件包列表。
-// 该示例需要访问网络，因此没有 Output 注释，不会被 go test 执行。
+// ExampleListPackages demonstrates returning the package list for a repository address and software
+// name. This example needs network access, so it has no Output comment and is not executed by
+// go test.
 func ExampleListPackages() {
 	ctx := context.Background()
 	const repoURL = "https://download.docker.com/linux/centos/7/x86_64/stable"
@@ -19,21 +20,21 @@ func ExampleListPackages() {
 		log.Fatal(err)
 	}
 	for _, pkg := range pkgs {
-		fmt.Printf("%s\t%d 字节\t%s\t%s\n",
+		fmt.Printf("%s\t%d bytes\t%s\t%s\n",
 			pkg.NEVRA(), pkg.Size.Package, pkg.Checksum, pkg.DownloadURL)
 	}
 
-	// 只取最新版本，并查看依赖关系。
+	// Take only the newest version and inspect the dependencies.
 	latest, err := rpmrepo.FindPackage(ctx, repoURL, "docker-ce")
 	if err != nil {
 		log.Fatal(err)
 	}
-	fmt.Println("最新版本:", latest.NEVRA())
+	fmt.Println("latest version:", latest.NEVRA())
 	for _, req := range latest.Format.Requires {
-		fmt.Println("依赖:", req)
+		fmt.Println("requires:", req)
 	}
 
-	// 需要更精细的条件时使用 Query。
+	// Use Query when finer-grained conditions are needed.
 	amd64, err := rpmrepo.FindPackages(ctx, repoURL, rpmrepo.Query{
 		Name:   "docker-ce",
 		Arch:   "x86_64",
@@ -42,19 +43,19 @@ func ExampleListPackages() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	fmt.Println("x86_64 最新包数量:", len(amd64))
+	fmt.Println("number of newest x86_64 packages:", len(amd64))
 }
 
-// ExampleOpen 演示复用仓库对象遍历大量软件包。
+// ExampleOpen demonstrates reusing a repository object to iterate over many packages.
 func ExampleOpen() {
 	ctx := context.Background()
 	repo, err := rpmrepo.Open(ctx, "https://download.docker.com/linux/centos/7/x86_64/stable")
 	if err != nil {
 		log.Fatal(err)
 	}
-	fmt.Println("仓库标识:", repo.ID, "revision:", repo.Revision)
+	fmt.Println("repository ID:", repo.ID, "revision:", repo.Revision)
 
-	// 流式遍历，内存占用与包数量无关。
+	// Stream over the packages; memory usage does not depend on the number of packages.
 	count := 0
 	if err := repo.Scan(ctx, func(pkg *rpmrepo.Package) error {
 		count++
@@ -62,5 +63,5 @@ func ExampleOpen() {
 	}); err != nil {
 		log.Fatal(err)
 	}
-	fmt.Println("软件包总数:", count)
+	fmt.Println("total number of packages:", count)
 }

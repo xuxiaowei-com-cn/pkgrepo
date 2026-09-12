@@ -7,14 +7,16 @@ import (
 	"strings"
 )
 
-// maxControlLineSize 是单行的最大长度。索引里的 Description 等字段可能很长，
-// 但没有实际意义上限，这里给一个足够宽松的限制以避免恶意数据撑爆内存。
+// maxControlLineSize is the maximum length of a single line. Fields such as Description in an index
+// can be very long and have no practical upper bound, so this limit is deliberately generous to keep
+// malicious data from exhausting memory.
 const maxControlLineSize = 4 << 20
 
-// Stanza 是 deb822 格式（Packages、Sources、Release、control 等）中的一段。
+// Stanza is one paragraph in the deb822 format (Packages, Sources, Release, control, and so on).
 //
-// 字段名不区分大小写；取值为"逻辑值"：续行（以空格或制表符开头的行）去掉一个前导
-// 空白字符后，与上一行用 "\n" 连接，因此 Description、Files 等多行字段可以原样取出。
+// Field names are case-insensitive. A value is a "logical value": continuation lines (lines starting
+// with a space or a tab) have one leading whitespace character removed and are joined to the previous
+// line with "\n", so multi-line fields such as Description and Files are returned as they are.
 //
 //	Package: nginx
 //	Depends: libc6 (>= 2.34),
@@ -27,7 +29,8 @@ type Stanza struct {
 	values map[string]string
 }
 
-// Get 返回字段值，字段不存在时返回空字符串。name 不区分大小写。
+// Get returns the field value, or an empty string when the field is absent. name is
+// case-insensitive.
 func (s *Stanza) Get(name string) string {
 	if s == nil {
 		return ""
@@ -35,7 +38,7 @@ func (s *Stanza) Get(name string) string {
 	return s.values[strings.ToLower(name)]
 }
 
-// Has 判断字段是否存在（即使值为空）。
+// Has reports whether the field exists (even when its value is empty).
 func (s *Stanza) Has(name string) bool {
 	if s == nil {
 		return false
@@ -44,7 +47,7 @@ func (s *Stanza) Has(name string) bool {
 	return ok
 }
 
-// Names 按字段在文件中的出现顺序返回字段名。
+// Names returns the field names in the order they appear in the file.
 func (s *Stanza) Names() []string {
 	if s == nil {
 		return nil
@@ -54,7 +57,7 @@ func (s *Stanza) Names() []string {
 	return names
 }
 
-// Len 返回字段数量。
+// Len returns the number of fields.
 func (s *Stanza) Len() int {
 	if s == nil {
 		return 0
@@ -62,7 +65,7 @@ func (s *Stanza) Len() int {
 	return len(s.names)
 }
 
-// Fields 返回字段名（原样大小写）到值的映射副本。
+// Fields returns a copy of the field name (with its original case) to value mapping.
 func (s *Stanza) Fields() map[string]string {
 	if s == nil {
 		return nil
@@ -74,7 +77,7 @@ func (s *Stanza) Fields() map[string]string {
 	return fields
 }
 
-// String 按文件中的顺序还原为 deb822 文本。
+// String renders the stanza back into deb822 text in file order.
 func (s *Stanza) String() string {
 	if s == nil {
 		return ""
@@ -99,7 +102,8 @@ func (s *Stanza) String() string {
 	return sb.String()
 }
 
-// set 写入字段值，同名（不区分大小写）字段会被覆盖并保留首次出现的位置。
+// set writes a field value; a field with the same name (case-insensitively) is overwritten and keeps
+// the position of its first occurrence.
 func (s *Stanza) set(name, value string) {
 	key := strings.ToLower(name)
 	if _, ok := s.values[key]; !ok {
@@ -108,13 +112,13 @@ func (s *Stanza) set(name, value string) {
 	s.values[key] = value
 }
 
-// appendLine 追加一行续行内容。
+// appendLine appends one continuation line.
 func (s *Stanza) appendLine(name, line string) {
 	key := strings.ToLower(name)
 	s.values[key] += "\n" + line
 }
 
-// ParseStanzas 读取整份 deb822 数据并返回所有段落。
+// ParseStanzas reads a complete deb822 document and returns all paragraphs.
 func ParseStanzas(r io.Reader) ([]Stanza, error) {
 	var stanzas []Stanza
 	err := ParseStanzasFunc(r, func(stanza *Stanza) error {
@@ -127,8 +131,9 @@ func ParseStanzas(r io.Reader) ([]Stanza, error) {
 	return stanzas, nil
 }
 
-// ParseStanzasFunc 流式解析 deb822 数据，每读到一个段落就调用一次 fn。
-// 段落之间以空行分隔，以 '#' 开头的行视为注释（与 apt 的行为一致）。
+// ParseStanzasFunc streams over deb822 data, calling fn once per paragraph.
+// Paragraphs are separated by blank lines, and lines starting with '#' are treated as comments (which
+// matches apt's behavior).
 func ParseStanzasFunc(r io.Reader, fn func(*Stanza) error) error {
 	if fn == nil {
 		return nil
@@ -154,26 +159,27 @@ func ParseStanzasFunc(r io.Reader, fn func(*Stanza) error) error {
 		line := strings.TrimRight(scanner.Text(), "\r")
 		switch {
 		case strings.TrimSpace(line) == "":
-			// 空行表示一个段落结束；连续空行不会产生空段落。
+			// A blank line ends a paragraph; consecutive blank lines do not produce empty
+			// paragraphs.
 			if err := flush(); err != nil {
 				return err
 			}
 		case line[0] == '#':
-			// apt 会忽略注释行，这里保持一致。
+			// apt ignores comment lines, and this behaves the same way.
 			continue
 		case line[0] == ' ' || line[0] == '\t':
 			if current == nil || lastField == "" {
-				return fmt.Errorf("%w: 第 %d 行是续行，但前面没有字段: %q", ErrInvalidControl, lineNo, line)
+				return fmt.Errorf("%w: line %d is a continuation line but there is no preceding field: %q", ErrInvalidControl, lineNo, line)
 			}
 			current.appendLine(lastField, strings.TrimRight(line[1:], " \t"))
 		default:
 			colon := strings.IndexByte(line, ':')
 			if colon <= 0 {
-				return fmt.Errorf("%w: 第 %d 行缺少字段名: %q", ErrInvalidControl, lineNo, line)
+				return fmt.Errorf("%w: line %d is missing a field name: %q", ErrInvalidControl, lineNo, line)
 			}
 			name := strings.TrimSpace(line[:colon])
 			if name == "" {
-				return fmt.Errorf("%w: 第 %d 行的字段名为空: %q", ErrInvalidControl, lineNo, line)
+				return fmt.Errorf("%w: the field name on line %d is empty: %q", ErrInvalidControl, lineNo, line)
 			}
 			if current == nil {
 				current = &Stanza{values: make(map[string]string, 16)}
@@ -183,7 +189,7 @@ func ParseStanzasFunc(r io.Reader, fn func(*Stanza) error) error {
 		}
 	}
 	if err := scanner.Err(); err != nil {
-		return fmt.Errorf("debrepo: 读取 deb822 数据失败: %w", err)
+		return fmt.Errorf("debrepo: reading deb822 data failed: %w", err)
 	}
 	return flush()
 }

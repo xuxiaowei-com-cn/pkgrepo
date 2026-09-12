@@ -6,8 +6,8 @@ import (
 	"testing"
 )
 
-// 说明：核心解析逻辑在 realrepo_test.go 中直接使用真实仓库的 primary.xml 验证，
-// 这里只覆盖不依赖网络的解析细节与边界情况。
+// Note: the core parsing logic is verified in realrepo_test.go against the primary.xml of a real
+// repository; this file only covers parsing details and edge cases that do not need network access.
 
 func TestParsePrimaryMeta(t *testing.T) {
 	document := `<?xml version="1.0" encoding="UTF-8"?>
@@ -16,16 +16,16 @@ func TestParsePrimaryMeta(t *testing.T) {
 </metadata>`
 	meta, err := ParsePrimaryMeta(strings.NewReader(document))
 	if err != nil {
-		t.Fatalf("ParsePrimaryMeta 失败: %v", err)
+		t.Fatalf("ParsePrimaryMeta failed: %v", err)
 	}
 	if meta.Packages != 3 {
-		t.Errorf("packages 属性为 %d，期望 3", meta.Packages)
+		t.Errorf("the packages attribute is %d, want 3", meta.Packages)
 	}
 }
 
 func TestParsePrimaryMetaMissing(t *testing.T) {
 	if _, err := ParsePrimaryMeta(strings.NewReader("<other/>")); err == nil {
-		t.Fatal("缺少 metadata 元素时应当报错")
+		t.Fatal("a missing metadata element should fail")
 	}
 }
 
@@ -35,29 +35,29 @@ func TestParsePrimaryStopsOnError(t *testing.T) {
   <package type="rpm"><name>a</name><arch>noarch</arch><version epoch="0" ver="1"/></package>
   <package type="rpm"><name>b</name><arch>noarch</arch><version epoch="0" ver="1"/></package>
 </metadata>`
-	sentinel := errors.New("停止解析")
+	sentinel := errors.New("stop parsing")
 	count := 0
 	err := ParsePrimary(strings.NewReader(document), func(*Package) error {
 		count++
 		return sentinel
 	})
 	if !errors.Is(err, sentinel) {
-		t.Errorf("错误为 %v，期望回调返回的错误", err)
+		t.Errorf("error is %v, want the error returned by the callback", err)
 	}
 	if count != 1 {
-		t.Errorf("回调执行了 %d 次，期望 1 次", count)
+		t.Errorf("the callback ran %d times, want 1", count)
 	}
 }
 
 func TestParsePrimaryInvalidXML(t *testing.T) {
 	if err := ParsePrimary(strings.NewReader("<metadata><package>"), func(*Package) error { return nil }); err == nil {
-		t.Fatal("非法 XML 应当报错")
+		t.Fatal("invalid XML should fail")
 	}
 }
 
-// TestParsePrimaryLatin1 覆盖 xml 声明为 ISO-8859-1 的老仓库元数据。
+// TestParsePrimaryLatin1 covers metadata from old repositories whose XML declaration is ISO-8859-1.
 func TestParsePrimaryLatin1(t *testing.T) {
-	// 这里用 é（0xE9）验证 Latin-1 字节到 UTF-8 的转换。
+	// The é (0xE9) below verifies the conversion from Latin-1 bytes to UTF-8.
 	document := "<?xml version=\"1.0\" encoding=\"ISO-8859-1\"?>\n" +
 		"<metadata xmlns=\"http://linux.duke.edu/metadata/common\" packages=\"1\">" +
 		"<package type=\"rpm\"><name>caf\xe9</name><arch>noarch</arch>" +
@@ -72,22 +72,22 @@ func TestParsePrimaryLatin1(t *testing.T) {
 		return nil
 	})
 	if err != nil {
-		t.Fatalf("ParsePrimary 失败: %v", err)
+		t.Fatalf("ParsePrimary failed: %v", err)
 	}
 	if pkg.Name != "café" || pkg.Summary != "café summary" {
-		t.Errorf("Latin-1 转 UTF-8 失败: name=%q summary=%q", pkg.Name, pkg.Summary)
+		t.Errorf("Latin-1 to UTF-8 conversion failed: name=%q summary=%q", pkg.Name, pkg.Summary)
 	}
 	if !bool(pkg.Checksum.PkgID) {
-		t.Error(`pkgid="YES" 应当解析为 true`)
+		t.Error(`pkgid="YES" should parse as true`)
 	}
 	if got, want := pkg.Checksum.String(), "md5:0123456789abcdef"; got != want {
-		t.Errorf("Checksum.String() 为 %q，期望 %q", got, want)
+		t.Errorf("Checksum.String() is %q, want %q", got, want)
 	}
 }
 
 func TestParsePrimaryUnsupportedCharset(t *testing.T) {
 	if _, err := ParsePrimaryMeta(strings.NewReader(`<?xml version="1.0" encoding="SHIFT_JIS"?><metadata/>`)); err == nil {
-		t.Fatal("不支持的字符集应当报错")
+		t.Fatal("an unsupported charset should fail")
 	}
 }
 
@@ -104,32 +104,32 @@ func TestPackageHelpers(t *testing.T) {
 		},
 	}
 	if got, want := pkg.NEVRA(), "nginx-1:1.24.0-1.el9.src"; got != want {
-		t.Errorf("NEVRA 为 %q，期望 %q", got, want)
+		t.Errorf("NEVRA is %q, want %q", got, want)
 	}
 	if got, want := pkg.Filename(), "nginx-1.24.0-1.el9.src.rpm"; got != want {
-		t.Errorf("Filename 为 %q，期望 %q", got, want)
+		t.Errorf("Filename is %q, want %q", got, want)
 	}
 	if !pkg.IsSource() {
-		t.Error("src 架构应当判定为源码包")
+		t.Error("the src architecture should be reported as a source package")
 	}
 	if !pkg.Provides("webserver") || pkg.Provides("docker") {
-		t.Error("Provides 判定有误")
+		t.Error("Provides returned a wrong result")
 	}
 	if !pkg.Requires("openssl") || pkg.Requires("nginx") {
-		t.Error("Requires 判定有误")
+		t.Error("Requires returned a wrong result")
 	}
 	if got, want := pkg.Format.Requires[0].String(), "openssl >= 3.0"; got != want {
-		t.Errorf("依赖描述为 %q，期望 %q", got, want)
+		t.Errorf("the dependency description is %q, want %q", got, want)
 	}
 	if pkg.Format.Requires[0].EVR().EpochInt() != 0 {
-		t.Error("依赖的 Epoch 应为 0")
+		t.Error("the dependency Epoch should be 0")
 	}
 
 	escaped := Package{Location: Location{Href: "Packages/nginx%20extras-1.0-1.noarch.rpm"}}
 	if got, want := escaped.Filename(), "nginx extras-1.0-1.noarch.rpm"; got != want {
-		t.Errorf("转义文件名解析为 %q，期望 %q", got, want)
+		t.Errorf("the escaped file name parsed as %q, want %q", got, want)
 	}
 	if (&Package{Arch: "nosrc"}).IsSource() == false {
-		t.Error("nosrc 架构也属于源码包")
+		t.Error("the nosrc architecture is also a source package")
 	}
 }

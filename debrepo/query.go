@@ -6,56 +6,61 @@ import (
 	"strings"
 )
 
-// SortOrder 是结果排序方式。
+// SortOrder is the way results are sorted.
 type SortOrder int
 
 const (
-	// SortDefault 先按名称升序，再按版本降序（新版本在前），最后按架构升序。
+	// SortDefault sorts by name ascending, then by version descending (newest first), and finally by
+	// architecture ascending.
 	SortDefault SortOrder = iota
-	// SortNone 保持索引中的原始顺序。
+	// SortNone keeps the original order from the index.
 	SortNone
-	// SortVersionAsc 先按名称升序，再按版本升序（旧版本在前）。
+	// SortVersionAsc sorts by name ascending, then by version ascending (oldest first).
 	SortVersionAsc
-	// SortVersionDesc 先按名称升序，再按版本降序，最后按架构升序。
+	// SortVersionDesc sorts by name ascending, then by version descending, and finally by
+	// architecture ascending.
 	SortVersionDesc
-	// SortFilenameAsc 按包文件名升序。
+	// SortFilenameAsc sorts by package file name ascending.
 	SortFilenameAsc
-	// SortSizeDesc 按包文件大小降序。
+	// SortSizeDesc sorts by package file size descending.
 	SortSizeDesc
 )
 
-// Query 描述一次二进制软件包查找。
+// Query describes a single binary package lookup.
 //
-// 零值 Query 匹配仓库中的所有软件包。各字段之间是"与"的关系。
+// The zero Query matches every package in the repository. The fields are combined with AND.
 type Query struct {
-	// Name 是软件包名称，支持 shell 通配符（*、?、[abc]），例如 "nginx*"。
+	// Name is the package name; it supports shell wildcards (*, ?, [abc]), for example "nginx*".
 	Name string
-	// Arch 是架构，例如 amd64、arm64、all；"any" 或空值表示不限制架构。
+	// Arch is the architecture, for example amd64, arm64, or all; "any" or an empty value means no
+	// architecture restriction.
 	Arch string
-	// Component 限定组件（main、contrib、universe…），同样支持通配符。
+	// Component restricts the component (main, contrib, universe, ...); it also supports wildcards.
 	Component string
-	// Provides 用于按虚拟包（Provides）查找，例如 "mail-transport-agent"。
+	// Provides looks up packages by virtual package (Provides), for example "mail-transport-agent".
 	Provides string
-	// Section、Priority 限定软件分类与优先级，支持通配符。
+	// Section and Priority restrict the software category and priority; they support wildcards.
 	Section  string
 	Priority string
-	// Version 精确匹配版本号（Debian 版本字符串，如 "1:1.22.1-9"）。
+	// Version matches the version number exactly (a Debian version string such as "1:1.22.1-9").
 	Version string
-	// Essential 非空时按 Essential 标记过滤。
+	// Essential filters by the Essential flag when it is non-nil.
 	Essential *bool
-	// Latest 为 true 时，每个"名称 + 架构 + 组件"只保留版本最新的一个包。
+	// When Latest is true, only the newest package is kept for every "name + architecture +
+	// component".
 	Latest bool
-	// IgnoreCase 为 true 时，名称、架构、组件、版本比较均忽略大小写。
+	// When IgnoreCase is true, name, architecture, component, and version comparisons all ignore
+	// case.
 	IgnoreCase bool
-	// Limit 大于 0 时最多返回 Limit 个包（在排序之后截断）。
+	// When Limit is greater than 0, at most Limit packages are returned (truncated after sorting).
 	Limit int
-	// Sort 是排序方式，零值为 SortDefault。
+	// Sort is the sort order; the zero value is SortDefault.
 	Sort SortOrder
-	// Filter 是自定义过滤函数，返回 false 的包会被排除。
+	// Filter is a custom filter function; packages for which it returns false are excluded.
 	Filter func(*Package) bool
 }
 
-// Match 判断软件包是否满足查询条件。
+// Match reports whether the package satisfies the query conditions.
 func (q Query) Match(p *Package) bool {
 	if p == nil {
 		return false
@@ -123,7 +128,7 @@ func (q Query) matchProvides(p *Package, name string) bool {
 
 func hasGlobMeta(s string) bool { return strings.ContainsAny(s, "*?[") }
 
-// sort 按 q.Sort 指定的方式对结果排序。
+// sort orders the results according to q.Sort.
 func (q Query) sort(pkgs []Package) {
 	switch q.Sort {
 	case SortNone:
@@ -135,12 +140,14 @@ func (q Query) sort(pkgs []Package) {
 	case SortVersionAsc:
 		sort.SliceStable(pkgs, func(i, j int) bool { return comparePackages(pkgs[i], pkgs[j], false) < 0 })
 	default:
-		// SortDefault 与 SortVersionDesc：名称升序、版本降序、架构升序。
+		// SortDefault and SortVersionDesc: name ascending, version descending, architecture
+		// ascending.
 		sort.SliceStable(pkgs, func(i, j int) bool { return comparePackages(pkgs[i], pkgs[j], true) < 0 })
 	}
 }
 
-// comparePackages 比较两个包：名称升序、架构升序，版本按 newestFirst 决定升降序。
+// comparePackages compares two packages: name ascending, architecture ascending, and version
+// ascending or descending depending on newestFirst.
 func comparePackages(a, b Package, newestFirst bool) int {
 	if c := strings.Compare(a.Name, b.Name); c != 0 {
 		return c
@@ -157,7 +164,8 @@ func comparePackages(a, b Package, newestFirst bool) int {
 	return strings.Compare(a.Component, b.Component)
 }
 
-// retainLatest 对每个"名称 + 架构 + 组件"只保留版本最新的包，保持原有顺序。
+// retainLatest keeps only the newest package for every "name + architecture + component", preserving
+// the original order.
 func retainLatest(pkgs []Package) []Package {
 	best := make(map[string]int, len(pkgs))
 	for i := range pkgs {
@@ -177,30 +185,31 @@ func retainLatest(pkgs []Package) []Package {
 	return latest
 }
 
-// SourceQuery 描述一次源码包（Sources 索引）查找。
+// SourceQuery describes a single source package (Sources index) lookup.
 type SourceQuery struct {
-	// Name 是源码包名称，支持 shell 通配符。
+	// Name is the source package name; it supports shell wildcards.
 	Name string
-	// Component 限定组件，支持通配符。
+	// Component restricts the component; it supports wildcards.
 	Component string
-	// Section、Priority 限定软件分类与优先级。
+	// Section and Priority restrict the software category and priority.
 	Section  string
 	Priority string
-	// Version 精确匹配版本号。
+	// Version matches the version number exactly.
 	Version string
-	// Latest 为 true 时，每个"名称 + 组件"只保留版本最新的一个源码包。
+	// When Latest is true, only the newest source package is kept for every "name + component".
 	Latest bool
-	// IgnoreCase 为 true 时比较忽略大小写。
+	// When IgnoreCase is true, comparisons ignore case.
 	IgnoreCase bool
-	// Limit 大于 0 时最多返回 Limit 个源码包（在排序之后截断）。
+	// When Limit is greater than 0, at most Limit source packages are returned (truncated after
+	// sorting).
 	Limit int
-	// Sort 是排序方式，零值为 SortDefault。
+	// Sort is the sort order; the zero value is SortDefault.
 	Sort SortOrder
-	// Filter 是自定义过滤函数，返回 false 的源码包会被排除。
+	// Filter is a custom filter function; source packages for which it returns false are excluded.
 	Filter func(*Source) bool
 }
 
-// Match 判断源码包是否满足查询条件。
+// Match reports whether the source package satisfies the query conditions.
 func (q SourceQuery) Match(s *Source) bool {
 	if s == nil {
 		return false
@@ -241,7 +250,7 @@ func (q SourceQuery) matchVersion(got, want string) bool {
 	return got == want
 }
 
-// sort 按 q.Sort 指定的方式对结果排序。
+// sort orders the results according to q.Sort.
 func (q SourceQuery) sort(sources []Source) {
 	switch q.Sort {
 	case SortNone:
@@ -268,7 +277,7 @@ func compareSources(a, b Source, newestFirst bool) int {
 	return strings.Compare(a.Component, b.Component)
 }
 
-// retainLatestSources 对每个"名称 + 组件"只保留版本最新的源码包。
+// retainLatestSources keeps only the newest source package for every "name + component".
 func retainLatestSources(sources []Source) []Source {
 	best := make(map[string]int, len(sources))
 	for i := range sources {

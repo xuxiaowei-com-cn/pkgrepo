@@ -6,52 +6,55 @@ import (
 	"strings"
 )
 
-// SortOrder 是结果排序方式。
+// SortOrder is the way results are sorted.
 type SortOrder int
 
 const (
-	// SortDefault 先按名称升序，再按版本降序（新版本在前），最后按架构升序。
+	// SortDefault sorts by name ascending, then by version descending (newest first), and finally by
+	// architecture ascending.
 	SortDefault SortOrder = iota
-	// SortNone 保持元数据中的原始顺序。
+	// SortNone keeps the original order from the metadata.
 	SortNone
-	// SortVersionAsc 先按名称升序，再按版本升序（旧版本在前）。
+	// SortVersionAsc sorts by name ascending, then by version ascending (oldest first).
 	SortVersionAsc
-	// SortVersionDesc 先按名称升序，再按版本降序，最后按架构升序。
+	// SortVersionDesc sorts by name ascending, then by version descending, and finally by
+	// architecture ascending.
 	SortVersionDesc
-	// SortBuildTimeDesc 按包构建时间降序（最新的包在前）。
+	// SortBuildTimeDesc sorts by package build time descending (newest package first).
 	SortBuildTimeDesc
-	// SortFilenameAsc 按包文件名升序。
+	// SortFilenameAsc sorts by package file name ascending.
 	SortFilenameAsc
 )
 
-// Query 描述一次软件包查找。
+// Query describes a single package lookup.
 //
-// 零值 Query 匹配仓库中的所有软件包。各字段之间是"与"的关系。
+// The zero Query matches every package in the repository. The fields are combined with AND.
 type Query struct {
-	// Name 是软件包名称，支持 shell 通配符（*、?、[abc]），例如 "nginx*"。
+	// Name is the package name; it supports shell wildcards (*, ?, [abc]), for example "nginx*".
 	Name string
-	// Arch 是架构，例如 x86_64、noarch、src，同样支持通配符。
-	// 传 "src" 时也会匹配 "nosrc"。
+	// Arch is the architecture, for example x86_64, noarch, or src; it also supports wildcards.
+	// Passing "src" also matches "nosrc".
 	Arch string
-	// Provides 用于按能力（Provides）查找，例如 "webserver"、"docker-ce"。
+	// Provides looks up packages by capability (Provides), for example "webserver" or "docker-ce".
 	Provides string
-	// Epoch、Version、Release 用于精确锁定版本，留空表示不限制。
+	// Epoch, Version, and Release pin an exact version; leaving them empty means no restriction.
 	Epoch   string
 	Version string
 	Release string
-	// Latest 为 true 时，每个"名称 + 架构"只保留版本最新的一个包。
+	// When Latest is true, only the newest package is kept for every "name + architecture".
 	Latest bool
-	// IgnoreCase 为 true 时，名称、架构、能力、版本比较均忽略大小写。
+	// When IgnoreCase is true, name, architecture, capability, and version comparisons all ignore
+	// case.
 	IgnoreCase bool
-	// Limit 大于 0 时最多返回 Limit 个包（在排序之后截断）。
+	// When Limit is greater than 0, at most Limit packages are returned (truncated after sorting).
 	Limit int
-	// Sort 是排序方式，零值为 SortDefault。
+	// Sort is the sort order; the zero value is SortDefault.
 	Sort SortOrder
-	// Filter 是自定义过滤函数，返回 false 的包会被排除。
+	// Filter is a custom filter function; packages for which it returns false are excluded.
 	Filter func(*Package) bool
 }
 
-// Match 判断软件包是否满足查询条件。
+// Match reports whether the package satisfies the query conditions.
 func (q Query) Match(p *Package) bool {
 	if p == nil {
 		return false
@@ -103,7 +106,7 @@ func (q Query) matchArch(arch string) bool {
 		ok, err := path.Match(want, got)
 		return err == nil && ok
 	}
-	// "src" 同时匹配源码包使用的 "nosrc" 架构。
+	// "src" also matches the "nosrc" architecture used by source packages.
 	return want == "src" && got == "nosrc"
 }
 
@@ -130,7 +133,7 @@ func (q Query) matchDependency(deps []Dependency, name string) bool {
 	return false
 }
 
-// matchField 比较单个版本字段，want 为空表示不限制。
+// matchField compares a single version field; an empty want means no restriction.
 func (q Query) matchField(got, want string) bool {
 	if want == "" {
 		return true
@@ -143,7 +146,7 @@ func (q Query) matchField(got, want string) bool {
 
 func hasGlobMeta(s string) bool { return strings.ContainsAny(s, "*?[") }
 
-// sort 按 q.Sort 指定的方式对结果排序。
+// sort orders the results according to q.Sort.
 func (q Query) sort(pkgs []Package) {
 	switch q.Sort {
 	case SortNone:
@@ -159,12 +162,14 @@ func (q Query) sort(pkgs []Package) {
 			return pkgs[i].Filename() < pkgs[j].Filename()
 		})
 	default:
-		// SortDefault 与 SortVersionDesc：名称升序、版本降序、架构升序。
+		// SortDefault and SortVersionDesc: name ascending, version descending, architecture
+		// ascending.
 		sort.SliceStable(pkgs, func(i, j int) bool { return comparePackages(pkgs[i], pkgs[j], true) < 0 })
 	}
 }
 
-// comparePackages 比较两个包：名称升序、架构升序，版本按 newestFirst 决定升降序。
+// comparePackages compares two packages: name ascending, architecture ascending, and version
+// ascending or descending depending on newestFirst.
 func comparePackages(a, b Package, newestFirst bool) int {
 	if c := strings.Compare(a.Name, b.Name); c != 0 {
 		return c
@@ -178,7 +183,8 @@ func comparePackages(a, b Package, newestFirst bool) int {
 	return strings.Compare(a.Arch, b.Arch)
 }
 
-// retainLatest 对每个"名称 + 架构"只保留版本最新的包，保持原有顺序。
+// retainLatest keeps only the newest package for every "name + architecture", preserving the
+// original order.
 func retainLatest(pkgs []Package) []Package {
 	best := make(map[string]int, len(pkgs))
 	for i := range pkgs {

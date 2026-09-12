@@ -10,29 +10,31 @@ import (
 	"strings"
 )
 
-// Fetcher 负责读取仓库中的文件（Release、Packages、Sources 等）。
-// 默认实现支持 http、https、file 协议，也可以替换为自己的实现（例如加本地缓存）。
+// Fetcher reads files from a repository (Release, Packages, Sources, and so on).
+// The default implementation supports the http, https, and file schemes; a custom implementation
+// (for example one that adds a local cache) can be supplied instead.
 type Fetcher interface {
-	// Open 打开 rawURL 指向的文件，调用方负责关闭返回的 io.ReadCloser。
+	// Open opens the file addressed by rawURL; the caller is responsible for closing the returned
+	// io.ReadCloser.
 	Open(ctx context.Context, rawURL string) (io.ReadCloser, error)
 }
 
-// defaultUserAgent 是默认的 User-Agent。
+// defaultUserAgent is the default User-Agent.
 const defaultUserAgent = "pkgrepo/0.1 (+https://github.com/xuxiaowei-com-cn/pkgrepo)"
 
-// HTTPFetcher 通过 HTTP(S) 读取仓库文件。
+// HTTPFetcher reads repository files over HTTP(S).
 type HTTPFetcher struct {
-	// Client 是底层 HTTP 客户端，为空时使用 http.DefaultClient。
+	// Client is the underlying HTTP client; when nil, http.DefaultClient is used.
 	Client *http.Client
-	// UserAgent 是请求头中的 User-Agent，为空时使用默认值。
+	// UserAgent is the User-Agent request header; when empty, the default value is used.
 	UserAgent string
 }
 
-// Open 实现 Fetcher 接口。
+// Open implements the Fetcher interface.
 func (f *HTTPFetcher) Open(ctx context.Context, rawURL string) (io.ReadCloser, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
 	if err != nil {
-		return nil, fmt.Errorf("debrepo: 构造请求失败: %w", err)
+		return nil, fmt.Errorf("debrepo: building request failed: %w", err)
 	}
 	userAgent := f.UserAgent
 	if userAgent == "" {
@@ -46,7 +48,7 @@ func (f *HTTPFetcher) Open(ctx context.Context, rawURL string) (io.ReadCloser, e
 	}
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("debrepo: 请求 %s 失败: %w", rawURL, err)
+		return nil, fmt.Errorf("debrepo: request %s failed: %w", rawURL, err)
 	}
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
 		resp.Body.Close()
@@ -55,10 +57,11 @@ func (f *HTTPFetcher) Open(ctx context.Context, rawURL string) (io.ReadCloser, e
 	return resp.Body, nil
 }
 
-// FileFetcher 通过本地文件系统读取仓库文件，便于离线使用与单元测试。
+// FileFetcher reads repository files from the local file system, which is convenient for offline use
+// and unit tests.
 type FileFetcher struct{}
 
-// Open 实现 Fetcher 接口。
+// Open implements the Fetcher interface.
 func (f *FileFetcher) Open(ctx context.Context, rawURL string) (io.ReadCloser, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
@@ -74,28 +77,28 @@ func (f *FileFetcher) Open(ctx context.Context, rawURL string) (io.ReadCloser, e
 	return file, nil
 }
 
-// filePath 把 file:// URL 或无协议前缀的本地路径转换为文件系统路径。
+// filePath converts a file:// URL or a scheme-less local path into a file system path.
 func filePath(rawURL string) (string, error) {
 	u, err := url.Parse(rawURL)
 	if err != nil {
-		return "", fmt.Errorf("debrepo: 非法的地址 %q: %w", rawURL, err)
+		return "", fmt.Errorf("debrepo: invalid address %q: %w", rawURL, err)
 	}
 	if u.Scheme == "" {
 		return rawURL, nil
 	}
 	if u.Scheme != "file" {
-		return "", fmt.Errorf("debrepo: 不支持的协议 %q", u.Scheme)
+		return "", fmt.Errorf("debrepo: unsupported scheme %q", u.Scheme)
 	}
 	if u.Host != "" && u.Host != "localhost" {
-		return "", fmt.Errorf("debrepo: 不支持的 file 地址主机 %q", u.Host)
+		return "", fmt.Errorf("debrepo: unsupported host %q in file address", u.Host)
 	}
 	if u.Path == "" {
-		return "", fmt.Errorf("debrepo: file 地址缺少路径: %q", rawURL)
+		return "", fmt.Errorf("debrepo: file address is missing a path: %q", rawURL)
 	}
 	return u.Path, nil
 }
 
-// schemeFetcher 按地址协议分发到 HTTP 或本地文件实现。
+// schemeFetcher dispatches to the HTTP or local file implementation based on the address scheme.
 type schemeFetcher struct {
 	http Fetcher
 	file Fetcher
@@ -104,7 +107,7 @@ type schemeFetcher struct {
 func (f *schemeFetcher) Open(ctx context.Context, rawURL string) (io.ReadCloser, error) {
 	u, err := url.Parse(rawURL)
 	if err != nil {
-		return nil, fmt.Errorf("debrepo: 非法的地址 %q: %w", rawURL, err)
+		return nil, fmt.Errorf("debrepo: invalid address %q: %w", rawURL, err)
 	}
 	switch strings.ToLower(u.Scheme) {
 	case "http", "https":
@@ -112,6 +115,6 @@ func (f *schemeFetcher) Open(ctx context.Context, rawURL string) (io.ReadCloser,
 	case "file", "":
 		return f.file.Open(ctx, rawURL)
 	default:
-		return nil, fmt.Errorf("debrepo: 不支持的协议 %q", u.Scheme)
+		return nil, fmt.Errorf("debrepo: unsupported scheme %q", u.Scheme)
 	}
 }

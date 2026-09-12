@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-// 常见的 repomd.xml 元数据类型。
+// Common repomd.xml metadata types.
 const (
 	DataTypePrimary        = "primary"
 	DataTypeFilelists      = "filelists"
@@ -28,45 +28,45 @@ const (
 	DataTypeUpdateInfoZstd = "updateinfo_zstd"
 )
 
-// RepoMD 是 repodata/repomd.xml 的解析结果：仓库元数据的索引。
+// RepoMD is the parse result of repodata/repomd.xml: an index of the repository metadata.
 type RepoMD struct {
 	XMLName  xml.Name     `xml:"repomd" json:"-"`
 	Revision string       `xml:"revision" json:"revision"`
 	Data     []RepoMDData `xml:"data" json:"data"`
 }
 
-// RepoMDData 描述 repomd.xml 中的一个元数据文件。
+// RepoMDData describes a single metadata file in repomd.xml.
 type RepoMDData struct {
-	// Type 是元数据类型，例如 primary、filelists、other、primary_db。
+	// Type is the metadata type, for example primary, filelists, other, or primary_db.
 	Type string `xml:"type,attr" json:"type"`
-	// Checksum 是元数据文件（压缩后）的校验值。
+	// Checksum is the checksum of the metadata file (after compression).
 	Checksum Checksum `xml:"checksum" json:"checksum"`
-	// OpenChecksum 是元数据解压后的校验值。
+	// OpenChecksum is the checksum of the decompressed metadata.
 	OpenChecksum Checksum `xml:"open-checksum" json:"open_checksum"`
-	// Location 是元数据文件的相对路径。
+	// Location is the relative path of the metadata file.
 	Location Location `xml:"location" json:"location"`
-	// Timestamp 是元数据的生成时间。
+	// Timestamp is the creation time of the metadata.
 	Timestamp UnixTime `xml:"timestamp" json:"timestamp"`
-	// Size 是元数据文件（压缩后）的大小。
+	// Size is the size of the metadata file (after compression).
 	Size int64 `xml:"size" json:"size"`
-	// OpenSize 是元数据解压后的大小。
+	// OpenSize is the size of the decompressed metadata.
 	OpenSize int64 `xml:"open-size" json:"open_size"`
-	// DatabaseVersion 是 sqlite 数据库（*_db）的版本。
+	// DatabaseVersion is the version of the sqlite database (*_db).
 	DatabaseVersion string `xml:"database_version" json:"database_version,omitempty"`
 }
 
-// ParseRepoMD 解析 repodata/repomd.xml。
+// ParseRepoMD parses repodata/repomd.xml.
 func ParseRepoMD(r io.Reader) (*RepoMD, error) {
 	var repomd RepoMD
 	dec := xml.NewDecoder(r)
 	dec.CharsetReader = charsetReader
 	if err := dec.Decode(&repomd); err != nil {
-		return nil, fmt.Errorf("rpmrepo: 解析 repomd.xml 失败: %w", err)
+		return nil, fmt.Errorf("rpmrepo: parsing repomd.xml failed: %w", err)
 	}
 	return &repomd, nil
 }
 
-// DataByType 按类型查找元数据，类型名不区分大小写。
+// DataByType looks up metadata by type; the type name is case-insensitive.
 func (m *RepoMD) DataByType(dataType string) (*RepoMDData, bool) {
 	if m == nil {
 		return nil, false
@@ -79,7 +79,7 @@ func (m *RepoMD) DataByType(dataType string) (*RepoMDData, bool) {
 	return nil, false
 }
 
-// Primary 返回 primary 元数据，仓库中不存在时返回 ErrPrimaryNotFound。
+// Primary returns the primary metadata, or ErrPrimaryNotFound when it is absent from the repository.
 func (m *RepoMD) Primary() (*RepoMDData, error) {
 	data, ok := m.DataByType(DataTypePrimary)
 	if !ok {
@@ -88,7 +88,8 @@ func (m *RepoMD) Primary() (*RepoMDData, error) {
 	return data, nil
 }
 
-// Types 返回仓库包含的元数据类型列表，保持 repomd.xml 中的顺序。
+// Types returns the list of metadata types contained in the repository, preserving the order used in
+// repomd.xml.
 func (m *RepoMD) Types() []string {
 	if m == nil {
 		return nil

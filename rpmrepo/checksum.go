@@ -12,7 +12,7 @@ import (
 	"strings"
 )
 
-// newHash 按算法名创建哈希计算器，算法名不区分大小写。
+// newHash creates a hash calculator from an algorithm name; the name is case-insensitive.
 func newHash(algo string) (hash.Hash, error) {
 	switch strings.ToLower(strings.TrimSpace(algo)) {
 	case "sha256":
@@ -32,7 +32,8 @@ func newHash(algo string) (hash.Hash, error) {
 	}
 }
 
-// verifyReader 边读边计算摘要，并在读到结尾时与期望值比对。
+// verifyReader computes the digest while reading and compares it with the expected value at end of
+// file.
 type verifyReader struct {
 	r        io.Reader
 	hash     hash.Hash
@@ -52,7 +53,7 @@ func (v *verifyReader) Read(p []byte) (int, error) {
 	if err == io.EOF {
 		actual := hex.EncodeToString(v.hash.Sum(nil))
 		if !strings.EqualFold(actual, v.expected) {
-			v.err = fmt.Errorf("%w: 期望 %s %s，实际 %s",
+			v.err = fmt.Errorf("%w: expected %s %s, got %s",
 				ErrChecksumMismatch, v.algo, v.expected, actual)
 			return n, v.err
 		}

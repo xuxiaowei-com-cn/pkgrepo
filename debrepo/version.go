@@ -7,24 +7,25 @@ import (
 	"strings"
 )
 
-// Version 是 Debian 版本号：[epoch:]upstream[-revision]。
+// Version is a Debian version number: [epoch:]upstream[-revision].
 //
-//	1:1.22.1-9  →  Epoch=1, Upstream="1.22.1", Revision="9"
-//	2.36        →  Epoch=0, Upstream="2.36",      Revision=""
+//	1:1.22.1-9  ->  Epoch=1, Upstream="1.22.1", Revision="9"
+//	2.36        ->  Epoch=0, Upstream="2.36",      Revision=""
 type Version struct {
-	// Epoch 是纪元，未显式给出时为 0。
+	// Epoch is the epoch, which is 0 when not given explicitly.
 	Epoch int `json:"epoch"`
-	// Upstream 是上游版本号。
+	// Upstream is the upstream version number.
 	Upstream string `json:"upstream"`
-	// Revision 是 Debian 修订号（最后一个 '-' 之后的部分），可能为空。
+	// Revision is the Debian revision (the part after the last '-'), which may be empty.
 	Revision string `json:"revision"`
 }
 
-// ParseVersion 解析 Debian 版本号。epoch 必须是数字，上游版本号不能为空。
+// ParseVersion parses a Debian version number. The epoch must be numeric and the upstream version must
+// not be empty.
 func ParseVersion(raw string) (Version, error) {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
-		return Version{}, fmt.Errorf("%w: 版本号为空", ErrInvalidVersion)
+		return Version{}, fmt.Errorf("%w: empty version number", ErrInvalidVersion)
 	}
 	v := Version{}
 	rest := raw
@@ -32,7 +33,7 @@ func ParseVersion(raw string) (Version, error) {
 		epoch := rest[:colon]
 		value, err := strconv.Atoi(strings.TrimSpace(epoch))
 		if err != nil || value < 0 {
-			return Version{}, fmt.Errorf("%w: 非法的 epoch %q（来自 %q）", ErrInvalidVersion, epoch, raw)
+			return Version{}, fmt.Errorf("%w: invalid epoch %q (from %q)", ErrInvalidVersion, epoch, raw)
 		}
 		v.Epoch = value
 		rest = rest[colon+1:]
@@ -44,12 +45,13 @@ func ParseVersion(raw string) (Version, error) {
 		v.Upstream = rest
 	}
 	if v.Upstream == "" {
-		return Version{}, fmt.Errorf("%w: 缺少上游版本号（来自 %q）", ErrInvalidVersion, raw)
+		return Version{}, fmt.Errorf("%w: missing upstream version (from %q)", ErrInvalidVersion, raw)
 	}
 	return v, nil
 }
 
-// MustParseVersion 与 ParseVersion 相同，但解析失败时 panic，便于在测试与常量中使用。
+// MustParseVersion is like ParseVersion but panics when parsing fails, which makes it convenient in
+// tests and for constants.
 func MustParseVersion(raw string) Version {
 	v, err := ParseVersion(raw)
 	if err != nil {
@@ -58,10 +60,11 @@ func MustParseVersion(raw string) Version {
 	return v
 }
 
-// IsZero 判断版本号是否为空。
+// IsZero reports whether the version is empty.
 func (v Version) IsZero() bool { return v.Upstream == "" && v.Revision == "" && v.Epoch == 0 }
 
-// String 返回 "epoch:upstream-revision"，epoch 为 0、revision 为空时省略对应部分。
+// String returns "epoch:upstream-revision", omitting the epoch when it is 0 and the revision when it
+// is empty.
 func (v Version) String() string {
 	var sb strings.Builder
 	if v.Epoch != 0 {
@@ -76,8 +79,9 @@ func (v Version) String() string {
 	return sb.String()
 }
 
-// Compare 按 Debian 规则比较版本：先 epoch，再上游版本，最后 Debian 修订号。
-// 小于 0 表示 v 更旧，等于 0 表示相等，大于 0 表示 v 更新。
+// Compare compares versions by the Debian rules: epoch first, then the upstream version, and finally
+// the Debian revision. A result less than 0 means v is older, 0 means they are equal, and a result
+// greater than 0 means v is newer.
 func (v Version) Compare(o Version) int {
 	switch {
 	case v.Epoch < o.Epoch:
@@ -91,7 +95,7 @@ func (v Version) Compare(o Version) int {
 	return compareVersionPart(v.Revision, o.Revision)
 }
 
-// MarshalJSON 输出为 Debian 风格版本字符串，空版本输出 null。
+// MarshalJSON renders the version as a Debian-style version string, and an empty version as null.
 func (v Version) MarshalJSON() ([]byte, error) {
 	if v.IsZero() {
 		return []byte("null"), nil
@@ -99,7 +103,7 @@ func (v Version) MarshalJSON() ([]byte, error) {
 	return json.Marshal(v.String())
 }
 
-// UnmarshalJSON 解析 Debian 风格版本字符串。
+// UnmarshalJSON parses a Debian-style version string.
 func (v *Version) UnmarshalJSON(data []byte) error {
 	var raw string
 	if err := json.Unmarshal(data, &raw); err != nil {
@@ -113,10 +117,10 @@ func (v *Version) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// MarshalText 实现 encoding.TextMarshaler。
+// MarshalText implements encoding.TextMarshaler.
 func (v Version) MarshalText() ([]byte, error) { return []byte(v.String()), nil }
 
-// UnmarshalText 实现 encoding.TextUnmarshaler。
+// UnmarshalText implements encoding.TextUnmarshaler.
 func (v *Version) UnmarshalText(text []byte) error {
 	parsed, err := ParseVersion(string(text))
 	if err != nil {
@@ -126,31 +130,34 @@ func (v *Version) UnmarshalText(text []byte) error {
 	return nil
 }
 
-// CompareVersions 用 Debian 版本比较规则（dpkg --compare-versions）比较两个版本字符串，
-// 小于 0 表示 a 比 b 旧，等于 0 表示相等，大于 0 表示 a 比 b 新。
+// CompareVersions compares two version strings using the Debian version comparison rules
+// (dpkg --compare-versions): a result less than 0 means a is older than b, 0 means they are equal, and
+// a result greater than 0 means a is newer than b.
 //
-// 与 dpkg 保持一致的关键行为：
+// The key behaviors that keep it consistent with dpkg:
 //
-//   - 先比较 epoch（默认 0），例如 "1:1.0" > "2.0"；
-//   - 版本被拆成"非数字段"与"数字段"交替比较，数字段按数值比较，非数字段按
-//     字符顺序比较，字母排在所有非字母字符之前；
-//   - "~" 排在所有内容（包括空字符串）之前，例如 "1.0~rc1" < "1.0"；
-//   - 空修订号小于任何修订号，例如 "1.0" < "1.0-1"。
+//   - The epoch is compared first (defaulting to 0), so "1:1.0" > "2.0".
+//   - A version is split into alternating non-numeric and numeric segments; numeric segments are
+//     compared by value and non-numeric segments character by character, with letters sorting before
+//     every non-letter character.
+//   - "~" sorts before everything, including the empty string, so "1.0~rc1" < "1.0".
+//   - An empty revision is smaller than any revision, so "1.0" < "1.0-1".
 func CompareVersions(a, b string) int {
 	va, errA := ParseVersion(a)
 	vb, errB := ParseVersion(b)
 	if errA != nil || errB != nil {
-		// 版本号非法时退化为按字面比较，避免解析失败导致无法排序。
+		// Fall back to a literal comparison when a version is invalid, so that a parse failure does
+		// not make sorting impossible.
 		return strings.Compare(a, b)
 	}
 	return va.Compare(vb)
 }
 
-// compareVersionPart 实现 dpkg 的 verrevcmp。
+// compareVersionPart implements verrevcmp from dpkg.
 func compareVersionPart(a, b string) int {
 	i, j := 0, 0
 	for i < len(a) || j < len(b) {
-		// 非数字段：逐字符比较，遇到数字结束。
+		// Non-numeric segments: compare character by character until a digit is reached.
 		for (i < len(a) && !isDigit(a[i])) || (j < len(b) && !isDigit(b[j])) {
 			ac, bc := 0, 0
 			if i < len(a) {
@@ -166,7 +173,8 @@ func compareVersionPart(a, b string) int {
 			j++
 		}
 
-		// 数字段：先跳过前导 0，再按数值（位数 + 逐位差）比较。
+		// Numeric segments: skip leading zeros first, then compare by value (length plus the
+		// per-digit difference).
 		for i < len(a) && a[i] == '0' {
 			i++
 		}
@@ -194,7 +202,7 @@ func compareVersionPart(a, b string) int {
 	return 0
 }
 
-// versionOrder 返回字符在比较时的权重，与 dpkg 的 order() 一致。
+// versionOrder returns the weight of a character during comparison, matching order() from dpkg.
 func versionOrder(c byte) int {
 	switch {
 	case isDigit(c):

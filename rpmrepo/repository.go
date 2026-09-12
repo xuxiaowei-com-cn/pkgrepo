@@ -10,27 +10,28 @@ import (
 	"strings"
 )
 
-// Repository 是一个已解析元数据的 RPM 仓库。
+// Repository is an RPM repository whose metadata has been parsed.
 type Repository struct {
-	// URL 是调用方传入的仓库地址。
+	// URL is the repository address passed in by the caller.
 	URL string
-	// BaseURL 是规范化后的仓库根地址（以 / 结尾）。
+	// BaseURL is the normalized repository root address (ending with /).
 	BaseURL *url.URL
-	// ID 是由仓库地址推导出的标识，例如 download.docker.com/linux/centos/7/x86_64/stable。
+	// ID is the identifier derived from the repository address, for example
+	// download.docker.com/linux/centos/7/x86_64/stable.
 	ID string
-	// RepoMD 是 repodata/repomd.xml 的解析结果。
+	// RepoMD is the parse result of repodata/repomd.xml.
 	RepoMD *RepoMD
-	// Revision 是 repomd.xml 中的 revision 字段，元数据变化时会更新。
+	// Revision is the revision field of repomd.xml; it changes when the metadata changes.
 	Revision string
-	// Primary 是 primary 元数据在 repomd.xml 中的条目。
+	// Primary is the primary metadata entry in repomd.xml.
 	Primary *RepoMDData
 
 	client  *Client
 	fetcher Fetcher
 }
 
-// Open 读取并解析仓库元数据。repoURL 可以是仓库根地址、repomd.xml 的地址，
-// 也支持本地目录（./repo、/data/repo）与 file:// 地址。
+// Open reads and parses the repository metadata. repoURL can be the repository root address, the
+// address of repomd.xml, a local directory (./repo, /data/repo), or a file:// address.
 func (c *Client) Open(ctx context.Context, repoURL string) (*Repository, error) {
 	base, err := normalizeRepoURL(repoURL)
 	if err != nil {
@@ -40,16 +41,16 @@ func (c *Client) Open(ctx context.Context, repoURL string) (*Repository, error) 
 	repomdURL := base.JoinPath("repodata", "repomd.xml").String()
 	body, err := fetcher.Open(ctx, repomdURL)
 	if err != nil {
-		return nil, fmt.Errorf("%w（%s）: %w", ErrNotRepository, repomdURL, err)
+		return nil, fmt.Errorf("%w (%s): %w", ErrNotRepository, repomdURL, err)
 	}
 	defer body.Close()
 	repomd, err := ParseRepoMD(body)
 	if err != nil {
-		return nil, fmt.Errorf("%w（%s）: %w", ErrNotRepository, repomdURL, err)
+		return nil, fmt.Errorf("%w (%s): %w", ErrNotRepository, repomdURL, err)
 	}
 	primary, err := repomd.Primary()
 	if err != nil {
-		return nil, fmt.Errorf("%w（%s）", err, repomdURL)
+		return nil, fmt.Errorf("%w (%s)", err, repomdURL)
 	}
 	return &Repository{
 		URL:      repoURL,
@@ -63,7 +64,7 @@ func (c *Client) Open(ctx context.Context, repoURL string) (*Repository, error) 
 	}, nil
 }
 
-// PrimaryURL 返回 primary 元数据的绝对地址。
+// PrimaryURL returns the absolute address of the primary metadata.
 func (r *Repository) PrimaryURL() (string, error) {
 	if r.Primary == nil {
 		return "", ErrPrimaryNotFound
@@ -71,9 +72,10 @@ func (r *Repository) PrimaryURL() (string, error) {
 	return resolveLocation(r.BaseURL, r.Primary.Location)
 }
 
-// Scan 流式遍历仓库中的所有软件包，每读到一个包就调用一次 fn（内存占用恒定）。
+// Scan streams over every package in the repository, calling fn once per package (constant memory
+// usage).
 //
-// 返回的 Package 已填充 DownloadURL、RepoURL、RepoID。
+// The returned Package has DownloadURL, RepoURL, and RepoID populated.
 func (r *Repository) Scan(ctx context.Context, fn func(*Package) error) error {
 	if fn == nil {
 		return nil
@@ -95,12 +97,13 @@ func (r *Repository) Scan(ctx context.Context, fn func(*Package) error) error {
 	})
 }
 
-// Packages 返回仓库中的所有软件包（注意：大型仓库会占用较多内存）。
+// Packages returns every package in the repository (note that large repositories consume a lot of
+// memory).
 func (r *Repository) Packages(ctx context.Context) ([]Package, error) {
 	return r.FindPackages(ctx, Query{})
 }
 
-// FindPackages 返回满足 q 的所有软件包。
+// FindPackages returns all packages matching q.
 func (r *Repository) FindPackages(ctx context.Context, q Query) ([]Package, error) {
 	pkgs := make([]Package, 0, 16)
 	err := r.Scan(ctx, func(pkg *Package) error {
@@ -122,7 +125,7 @@ func (r *Repository) FindPackages(ctx context.Context, q Query) ([]Package, erro
 	return pkgs, nil
 }
 
-// FindPackage 返回版本最新的匹配包，找不到时返回 ErrPackageNotFound。
+// FindPackage returns the newest matching package, or ErrPackageNotFound when there is none.
 func (r *Repository) FindPackage(ctx context.Context, q Query) (*Package, error) {
 	q.Latest = true
 	q.Limit = 1
@@ -136,7 +139,8 @@ func (r *Repository) FindPackage(ctx context.Context, q Query) (*Package, error)
 	return &pkgs[0], nil
 }
 
-// openPrimary 打开 primary 元数据流，必要时按 repomd.xml 记录的校验和做校验。
+// openPrimary opens the primary metadata stream, verifying it against the checksum recorded in
+// repomd.xml when necessary.
 func (r *Repository) openPrimary(ctx context.Context) (io.ReadCloser, error) {
 	if r.Primary == nil {
 		return nil, ErrPrimaryNotFound
@@ -147,12 +151,12 @@ func (r *Repository) openPrimary(ctx context.Context) (io.ReadCloser, error) {
 	}
 	raw, err := r.fetcher.Open(ctx, primaryURL)
 	if err != nil {
-		return nil, fmt.Errorf("rpmrepo: 读取 primary 元数据失败: %w", err)
+		return nil, fmt.Errorf("rpmrepo: reading primary metadata failed: %w", err)
 	}
 	body, compressed, err := decompress(raw)
 	if err != nil {
 		raw.Close()
-		return nil, fmt.Errorf("rpmrepo: 读取 primary 元数据失败（%s）: %w", primaryURL, err)
+		return nil, fmt.Errorf("rpmrepo: reading primary metadata failed (%s): %w", primaryURL, err)
 	}
 	if !r.client.verify {
 		return body, nil
@@ -160,8 +164,9 @@ func (r *Repository) openPrimary(ctx context.Context) (io.ReadCloser, error) {
 	return withVerification(body, r.Primary, compressed)
 }
 
-// withVerification 在需要时给元数据流加上校验。
-// 压缩数据用 open-checksum（解压后的摘要），未压缩数据用 checksum。
+// withVerification adds verification to the metadata stream when needed.
+// Compressed data uses open-checksum (the digest of the decompressed data), and uncompressed data
+// uses checksum.
 func withVerification(body io.ReadCloser, data *RepoMDData, compressed bool) (io.ReadCloser, error) {
 	expected := data.OpenChecksum
 	if !compressed && expected.Value == "" {
@@ -193,32 +198,34 @@ type verifyCloser struct {
 
 func (c *verifyCloser) Close() error { return c.closer.Close() }
 
-// normalizeRepoURL 把用户输入的仓库地址规范化为以 / 结尾的 URL。
-// 支持 http(s)://、file://、本地目录路径，以及直接粘贴 repomd.xml 的地址。
+// normalizeRepoURL normalizes a user-supplied repository address into a URL ending with /.
+// It supports http(s)://, file://, local directory paths, and an address pointing directly at
+// repomd.xml.
 func normalizeRepoURL(rawURL string) (*url.URL, error) {
 	rawURL = strings.TrimSpace(rawURL)
 	if rawURL == "" {
-		return nil, errors.New("rpmrepo: 仓库地址不能为空")
+		return nil, errors.New("rpmrepo: repository address must not be empty")
 	}
-	// 没有协议前缀时按本地路径处理。
+	// Without a scheme prefix, treat the input as a local path.
 	if !strings.Contains(rawURL, "://") {
 		abs, err := filepath.Abs(rawURL)
 		if err != nil {
-			return nil, fmt.Errorf("rpmrepo: 解析本地仓库路径 %q 失败: %w", rawURL, err)
+			return nil, fmt.Errorf("rpmrepo: resolving local repository path %q failed: %w", rawURL, err)
 		}
 		return withTrailingSlash(&url.URL{Scheme: "file", Path: filepath.ToSlash(abs)}), nil
 	}
 	parsed, err := url.Parse(rawURL)
 	if err != nil {
-		return nil, fmt.Errorf("rpmrepo: 非法的仓库地址 %q: %w", rawURL, err)
+		return nil, fmt.Errorf("rpmrepo: invalid repository address %q: %w", rawURL, err)
 	}
 	switch strings.ToLower(parsed.Scheme) {
 	case "http", "https", "file":
 	default:
-		return nil, fmt.Errorf("rpmrepo: 不支持的仓库地址协议 %q", parsed.Scheme)
+		return nil, fmt.Errorf("rpmrepo: unsupported repository address scheme %q", parsed.Scheme)
 	}
-	// 允许直接传标准 repomd.xml 的地址。
-	// 元数据里的 href 是相对仓库根目录的，因此这里要退回仓库根目录。
+	// Accept an address pointing directly at the standard repomd.xml.
+	// The href values inside the metadata are relative to the repository root, so step back up to
+	// the repository root here.
 	parsed.Path = strings.TrimSuffix(parsed.Path, "/repodata/repomd.xml")
 	parsed.Path = strings.TrimSuffix(parsed.Path, "/repomd.xml")
 	return withTrailingSlash(parsed), nil
@@ -232,7 +239,7 @@ func withTrailingSlash(u *url.URL) *url.URL {
 	return &clone
 }
 
-// repoID 由仓库地址生成一个稳定的标识。
+// repoID derives a stable identifier from the repository address.
 func repoID(u *url.URL) string {
 	id := u.Host + strings.TrimSuffix(u.Path, "/")
 	if u.Scheme == "file" {
@@ -241,7 +248,7 @@ func repoID(u *url.URL) string {
 	return strings.Trim(id, "/")
 }
 
-// resolveLocation 把元数据中的相对地址解析为绝对地址。
+// resolveLocation resolves the relative address in the metadata into an absolute one.
 func resolveLocation(base *url.URL, location Location) (string, error) {
 	reference := base
 	if location.Base != "" {
@@ -265,7 +272,7 @@ func resolveURL(base *url.URL, reference string) (string, error) {
 func resolveURLRef(base *url.URL, reference string) (*url.URL, error) {
 	parsed, err := url.Parse(strings.TrimSpace(reference))
 	if err != nil {
-		return nil, fmt.Errorf("rpmrepo: 非法的相对地址 %q: %w", reference, err)
+		return nil, fmt.Errorf("rpmrepo: invalid relative address %q: %w", reference, err)
 	}
 	if parsed.IsAbs() {
 		return parsed, nil

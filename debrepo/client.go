@@ -6,11 +6,13 @@ import (
 	"time"
 )
 
-// defaultTimeout 是默认的 HTTP 超时，避免长时间卡在无响应的镜像上。
+// defaultTimeout is the default HTTP timeout, which avoids hanging for a long time on an
+// unresponsive mirror.
 const defaultTimeout = 2 * time.Minute
 
-// Client 是 deb 仓库客户端，可复用于多个仓库与多次查询。
-// 也可以使用包级函数 Open/ListPackages/FindPackages，它们使用默认配置的客户端。
+// Client is a deb repository client; it can be reused across repositories and queries.
+// The package-level functions Open/ListPackages/FindPackages can be used instead; they use a client
+// with the default configuration.
 type Client struct {
 	httpClient    *http.Client
 	userAgent     string
@@ -23,10 +25,10 @@ type Client struct {
 	architectures []string
 }
 
-// Option 用于配置 Client。
+// Option configures a Client.
 type Option func(*Client)
 
-// New 创建一个仓库客户端。
+// New creates a repository client.
 func New(opts ...Option) *Client {
 	client := &Client{}
 	for _, opt := range opts {
@@ -37,62 +39,67 @@ func New(opts ...Option) *Client {
 	return client
 }
 
-// WithHTTPClient 使用自定义的 HTTP 客户端（例如带代理、重试、超时控制）。
+// WithHTTPClient uses a custom HTTP client (for example one with a proxy, retries, or timeout
+// control).
 func WithHTTPClient(httpClient *http.Client) Option {
 	return func(c *Client) { c.httpClient = httpClient }
 }
 
-// WithUserAgent 设置请求头中的 User-Agent。
+// WithUserAgent sets the User-Agent request header.
 func WithUserAgent(userAgent string) Option {
 	return func(c *Client) { c.userAgent = userAgent }
 }
 
-// WithTimeout 设置 HTTP 请求超时，未设置时默认 2 分钟。
+// WithTimeout sets the HTTP request timeout; the default is 2 minutes when unset.
 func WithTimeout(timeout time.Duration) Option {
 	return func(c *Client) { c.timeout = timeout }
 }
 
-// WithFetcher 替换默认的下载实现，可用于本地缓存、离线数据源或测试桩。
+// WithFetcher replaces the default download implementation; it can be used for a local cache, an
+// offline data source, or a test stub.
 func WithFetcher(fetcher Fetcher) Option {
 	return func(c *Client) { c.fetcher = fetcher }
 }
 
-// WithChecksumVerification 控制是否校验索引校验和（默认关闭）。
+// WithChecksumVerification controls whether index checksums are verified (disabled by default).
 //
-// 开启后，每份 Packages/Sources 索引都会边解析边计算摘要，并与 Release 文件中
-// 记录的 SHA256/SHA512 等指纹比对，用于发现下载不完整或被篡改的索引。
+// When enabled, the digest of every Packages/Sources index is computed while it is parsed and
+// compared with the SHA256/SHA512 checksums recorded in the Release file, which detects incomplete
+// or tampered indexes.
 func WithChecksumVerification(enable bool) Option {
 	return func(c *Client) { c.verify = enable }
 }
 
-// WithByHashFirst 控制是否优先使用 by-hash 地址获取索引（默认关闭，即先尝试
-// 常规路径、失败后再回退到 by-hash）。仓库支持 by-hash 时（Release 中
-// Acquire-By-Hash: yes），by-hash 地址可以避免镜像同步过程中读到半新半旧的索引。
+// WithByHashFirst controls whether indexes are fetched from by-hash addresses first (disabled by
+// default, which tries the regular path first and falls back to by-hash on failure). When the
+// repository supports by-hash (Acquire-By-Hash: yes in the Release file), by-hash addresses prevent
+// reading a half-updated index while a mirror is synchronizing.
 func WithByHashFirst(enable bool) Option {
 	return func(c *Client) { c.byHashFirst = enable }
 }
 
-// WithSuite 设置发行版套件/代号，例如 bookworm、trixie、jammy、stable。
-// 地址中已经包含 dists/<suite> 时可以不设置。
+// WithSuite sets the distribution suite or codename, for example bookworm, trixie, jammy, or stable.
+// It can be omitted when the address already contains dists/<suite>.
 func WithSuite(suite string) Option {
 	return func(c *Client) { c.suite = suite }
 }
 
-// WithComponent 设置要扫描的组件，例如 main、contrib、universe。
-// 可以传多个；传 "*" 或 "any" 表示 Release 中列出的全部组件。
-// 未设置时优先使用 main，仓库没有 main 时使用 Release 中的第一个组件。
+// WithComponent sets the components to scan, for example main, contrib, or universe.
+// Several values can be passed; "*" or "any" means every component listed in the Release file. When
+// unset, main is preferred and the first component in the Release file is used when the repository
+// has no main.
 func WithComponent(components ...string) Option {
 	return func(c *Client) { c.components = components }
 }
 
-// WithArchitecture 设置要扫描的架构，例如 amd64、arm64、all。
-// 可以传多个；传 "*" 或 "any" 表示 Release 中列出的全部架构。
-// 未设置时使用宿主机架构（并自动带上 binary-all 索引）。
+// WithArchitecture sets the architectures to scan, for example amd64, arm64, or all.
+// Several values can be passed; "*" or "any" means every architecture listed in the Release file.
+// When unset, the host architecture is used (and the binary-all index is included automatically).
 func WithArchitecture(architectures ...string) Option {
 	return func(c *Client) { c.architectures = architectures }
 }
 
-// fetcherInstance 返回实际使用的下载实现。
+// fetcherInstance returns the download implementation actually in use.
 func (c *Client) fetcherInstance() Fetcher {
 	if c.fetcher != nil {
 		return c.fetcher
@@ -115,13 +122,13 @@ func (c *Client) fetcherInstance() Fetcher {
 	}
 }
 
-// ListPackages 读取仓库 repoURL 并返回名称匹配 name 的所有二进制软件包。
-// name 支持通配符，例如 "nginx*"。
+// ListPackages reads the repository at repoURL and returns every binary package whose name matches
+// name. name supports wildcards, for example "nginx*".
 func (c *Client) ListPackages(ctx context.Context, repoURL, name string) ([]Package, error) {
 	return c.FindPackages(ctx, repoURL, Query{Name: name})
 }
 
-// FindPackages 读取仓库 repoURL 并返回满足 q 的所有二进制软件包。
+// FindPackages reads the repository at repoURL and returns every binary package matching q.
 func (c *Client) FindPackages(ctx context.Context, repoURL string, q Query) ([]Package, error) {
 	repo, err := c.Open(ctx, repoURL)
 	if err != nil {
@@ -130,12 +137,13 @@ func (c *Client) FindPackages(ctx context.Context, repoURL string, q Query) ([]P
 	return repo.FindPackages(ctx, q)
 }
 
-// ListSources 读取仓库 repoURL 并返回名称匹配 name 的所有源码包。
+// ListSources reads the repository at repoURL and returns every source package whose name matches
+// name.
 func (c *Client) ListSources(ctx context.Context, repoURL, name string) ([]Source, error) {
 	return c.FindSources(ctx, repoURL, SourceQuery{Name: name})
 }
 
-// FindSources 读取仓库 repoURL 并返回满足 q 的所有源码包。
+// FindSources reads the repository at repoURL and returns every source package matching q.
 func (c *Client) FindSources(ctx context.Context, repoURL string, q SourceQuery) ([]Source, error) {
 	repo, err := c.Open(ctx, repoURL)
 	if err != nil {
@@ -144,14 +152,15 @@ func (c *Client) FindSources(ctx context.Context, repoURL string, q SourceQuery)
 	return repo.FindSources(ctx, q)
 }
 
-// Open 读取并解析仓库元数据（dists/<suite>/Release 或 InRelease）。
-// 同一个仓库需要多次查询时，先 Open 再复用返回的 Repository 可以少读一次 Release。
+// Open reads and parses the repository metadata (dists/<suite>/Release or InRelease).
+// When the same repository is queried several times, calling Open first and reusing the returned
+// Repository saves a repeated read of the Release file.
 func Open(ctx context.Context, repoURL string, opts ...Option) (*Repository, error) {
 	return New(opts...).Open(ctx, repoURL)
 }
 
-// ListPackages 读取仓库 repoURL 并返回名称匹配 name 的软件包列表，
-// 包含下载链接、大小、指纹（校验和）与依赖等元数据。
+// ListPackages reads the repository at repoURL and returns the packages whose name matches name,
+// including metadata such as the download link, size, checksum, and dependencies.
 //
 //	pkgs, err := debrepo.ListPackages(ctx, "https://deb.debian.org/debian", "nginx",
 //		debrepo.WithSuite("bookworm"), debrepo.WithArchitecture("amd64"))
@@ -159,12 +168,13 @@ func ListPackages(ctx context.Context, repoURL, name string, opts ...Option) ([]
 	return New(opts...).ListPackages(ctx, repoURL, name)
 }
 
-// FindPackages 读取仓库 repoURL 并返回满足 q 的软件包列表。
+// FindPackages reads the repository at repoURL and returns the packages matching q.
 func FindPackages(ctx context.Context, repoURL string, q Query, opts ...Option) ([]Package, error) {
 	return New(opts...).FindPackages(ctx, repoURL, q)
 }
 
-// FindPackage 返回仓库中版本最新的匹配包，找不到时返回 ErrPackageNotFound。
+// FindPackage returns the newest matching package in the repository, or ErrPackageNotFound when there
+// is none.
 func FindPackage(ctx context.Context, repoURL, name string, opts ...Option) (*Package, error) {
 	pkgs, err := New(opts...).FindPackages(ctx, repoURL, Query{Name: name, Latest: true, Limit: 1})
 	if err != nil {
@@ -176,12 +186,13 @@ func FindPackage(ctx context.Context, repoURL, name string, opts ...Option) (*Pa
 	return &pkgs[0], nil
 }
 
-// ListSources 读取仓库 repoURL 并返回名称匹配 name 的所有源码包。
+// ListSources reads the repository at repoURL and returns every source package whose name matches
+// name.
 func ListSources(ctx context.Context, repoURL, name string, opts ...Option) ([]Source, error) {
 	return New(opts...).ListSources(ctx, repoURL, name)
 }
 
-// FindSources 读取仓库 repoURL 并返回满足 q 的所有源码包。
+// FindSources reads the repository at repoURL and returns every source package matching q.
 func FindSources(ctx context.Context, repoURL string, q SourceQuery, opts ...Option) ([]Source, error) {
 	return New(opts...).FindSources(ctx, repoURL, q)
 }

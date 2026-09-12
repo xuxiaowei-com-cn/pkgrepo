@@ -1,6 +1,8 @@
-// Package rpmrepo 解析 RPM（YUM/DNF）软件仓库，是 pkgrepo 的 RPM 仓库 SDK。
+// Package rpmrepo parses RPM (YUM/DNF) software repositories; it is the RPM repository SDK of
+// pkgrepo.
 //
-// 最常用的入口：给定仓库地址与软件名称，返回软件包列表（下载链接、大小、指纹、依赖等）。
+// The most common entry point: given a repository URL and a software name, it returns the list of
+// packages (download link, size, checksum, dependencies, and so on).
 //
 //	pkgs, err := rpmrepo.ListPackages(ctx,
 //		"https://download.docker.com/linux/centos/7/x86_64/stable", "docker-ce")
@@ -8,11 +10,15 @@
 //		fmt.Println(pkg.NEVRA(), pkg.Size.Package, pkg.DownloadURL)
 //	}
 //
-// 工作流程：
+// Workflow:
 //
-//  1. 读取 <仓库地址>/repodata/repomd.xml，得到 primary 元数据的地址、大小、校验和；
-//  2. 流式下载并解析 primary.xml（自动识别 gzip、bzip2、xz、zstd 压缩，无需解压落盘）；
-//  3. 按包名过滤并返回结果，内存占用与仓库中的包数量无关。
+//  1. Read <repository URL>/repodata/repomd.xml to obtain the location, size, and checksum of the
+//     primary metadata.
+//  2. Stream and parse primary.xml (gzip, bzip2, xz, and zstd compression are detected
+//     automatically, no need to decompress to disk).
+//  3. Filter by package name and return the result; memory usage does not depend on the number of
+//     packages in the repository.
 //
-// 仓库地址支持 http、https、file 协议，也可以直接传本地目录路径（如 ./testdata/repo）。
+// Repository addresses support the http, https, and file schemes, or a local directory path
+// (such as ./testdata/repo).
 package rpmrepo

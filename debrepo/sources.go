@@ -8,34 +8,38 @@ import (
 	"strings"
 )
 
-// Source 是一个源码包的元数据，对应 Sources 索引中的一个段落。
+// Source is the metadata of a single source package, corresponding to one paragraph in the Sources
+// index.
 type Source struct {
-	// Name 是源码包名称（Package 字段）。
+	// Name is the source package name (the Package field).
 	Name string `json:"name"`
-	// Binary 是该源码包生成的二进制包名列表。
+	// Binary is the list of binary package names produced by this source package.
 	Binary []string `json:"binary,omitempty"`
-	// Version 是版本号。
+	// Version is the version number.
 	Version Version `json:"version"`
-	// Architecture 是源码包支持的架构（any、all 或具体架构列表）。
+	// Architecture is the architecture supported by the source package (any, all, or a list of
+	// specific architectures).
 	Architecture string `json:"architecture,omitempty"`
-	// Maintainer、Uploaders 是维护者与上传者。
+	// Maintainer and Uploaders are the maintainer and the uploaders.
 	Maintainer string   `json:"maintainer,omitempty"`
 	Uploaders  []string `json:"uploaders,omitempty"`
-	// Homepage、Section、Priority 同二进制包。
+	// Homepage, Section, and Priority are the same as for a binary package.
 	Homepage string `json:"homepage,omitempty"`
 	Section  string `json:"section,omitempty"`
 	Priority string `json:"priority,omitempty"`
-	// StandardsVersion 是打包时遵循的 Debian 政策版本。
+	// StandardsVersion is the Debian policy version followed while packaging.
 	StandardsVersion string `json:"standards_version,omitempty"`
-	// Format 是源码包格式，例如 "3.0 (quilt)"。
+	// Format is the source package format, for example "3.0 (quilt)".
 	Format string `json:"format,omitempty"`
-	// Directory 是源码包文件所在目录（相对仓库根），例如 pool/main/n/nginx。
+	// Directory is the directory holding the source package files (relative to the repository root),
+	// for example pool/main/n/nginx.
 	Directory string `json:"directory,omitempty"`
-	// Files 是源码包中的文件（MD5），Checksums 是各算法下的文件列表。
+	// Files are the files of the source package (MD5) and Checksums maps each algorithm to its file
+	// list.
 	Files     []FileEntry            `json:"files,omitempty"`
 	Checksums map[string][]FileEntry `json:"checksums,omitempty"`
 
-	// 构建依赖关系。
+	// Build dependency relations.
 	BuildDepends        Dependencies `json:"build_depends,omitempty"`
 	BuildDependsIndep   Dependencies `json:"build_depends_indep,omitempty"`
 	BuildDependsArch    Dependencies `json:"build_depends_arch,omitempty"`
@@ -43,27 +47,28 @@ type Source struct {
 	BuildConflictsIndep Dependencies `json:"build_conflicts_indep,omitempty"`
 	BuildConflictsArch  Dependencies `json:"build_conflicts_arch,omitempty"`
 
-	// 版本控制地址。
+	// Version control addresses.
 	VcsGit     string `json:"vcs_git,omitempty"`
 	VcsBrowser string `json:"vcs_browser,omitempty"`
 	VcsSvn     string `json:"vcs_svn,omitempty"`
 	VcsHg      string `json:"vcs_hg,omitempty"`
 	VcsBzr     string `json:"vcs_bzr,omitempty"`
-	// Testsuite 是 autopkgtest 相关的声明。
+	// Testsuite is the autopkgtest-related declaration.
 	Testsuite string `json:"testsuite,omitempty"`
 
-	// Suite、Component 是该源码包所属的发行版与组件。
+	// Suite and Component are the distribution and component the source package belongs to.
 	Suite     string `json:"suite,omitempty"`
 	Component string `json:"component,omitempty"`
-	// RepoURL 是包所属仓库的根地址，RepoID 是仓库标识。
+	// RepoURL is the root address of the repository the package belongs to and RepoID is the
+	// repository identifier.
 	RepoURL string `json:"repo_url,omitempty"`
 	RepoID  string `json:"repo_id,omitempty"`
 
-	// Fields 保存索引中的所有字段（键为小写字段名）。
+	// Fields holds every field of the index (keyed by lower-case field name).
 	Fields map[string]string `json:"fields,omitempty"`
 }
 
-// sourceDependencyFields 是 Source 中需要解析为依赖关系的字段。
+// sourceDependencyFields lists the Source fields that must be parsed as dependency relations.
 var sourceDependencyFields = []struct {
 	field string
 	set   func(*Source, Dependencies)
@@ -76,7 +81,7 @@ var sourceDependencyFields = []struct {
 	{"Build-Conflicts-Arch", func(s *Source, d Dependencies) { s.BuildConflictsArch = d }},
 }
 
-// sourceChecksumFields 是 Sources 索引中的文件校验字段。
+// sourceChecksumFields lists the file checksum fields of the Sources index.
 var sourceChecksumFields = []struct {
 	field string
 	algo  string
@@ -87,7 +92,7 @@ var sourceChecksumFields = []struct {
 	{"Checksums-Sha512", "sha512"},
 }
 
-// ParseSources 流式解析 Sources 索引，每解析出一个源码包就调用一次 fn。
+// ParseSources streams over the Sources index, calling fn once per parsed source package.
 func ParseSources(r io.Reader, fn func(*Source) error) error {
 	if fn == nil {
 		return nil
@@ -101,12 +106,12 @@ func ParseSources(r io.Reader, fn func(*Source) error) error {
 	})
 }
 
-// ParseSourceStanza 把 Sources 索引中的一个段落解析为 Source。
+// ParseSourceStanza parses one paragraph of the Sources index into a Source.
 func ParseSourceStanza(stanza *Stanza) (*Source, error) {
 	source := &Source{Checksums: make(map[string][]FileEntry, 4)}
 	source.Name = stanza.Get("Package")
 	if source.Name == "" {
-		return nil, fmt.Errorf("%w: 缺少 Package 字段", ErrInvalidPackage)
+		return nil, fmt.Errorf("%w: missing the Package field", ErrInvalidPackage)
 	}
 	source.Binary = splitList(stanza.Get("Binary"))
 	source.Architecture = stanza.Get("Architecture")
@@ -141,7 +146,7 @@ func ParseSourceStanza(stanza *Stanza) (*Source, error) {
 		}
 		entries, err := ParseFileEntries(value, item.algo)
 		if err != nil {
-			return nil, fmt.Errorf("%w: %s 的 %s 字段: %w", ErrInvalidPackage, source.Name, item.field, err)
+			return nil, fmt.Errorf("%w: %s field of %s: %w", ErrInvalidPackage, item.field, source.Name, err)
 		}
 		source.Checksums[item.algo] = entries
 		if item.algo == "md5" {
@@ -156,7 +161,7 @@ func ParseSourceStanza(stanza *Stanza) (*Source, error) {
 		}
 		deps, err := ParseDependencies(value)
 		if err != nil {
-			return nil, fmt.Errorf("%w: %s 的 %s 字段: %w", ErrInvalidPackage, source.Name, item.field, err)
+			return nil, fmt.Errorf("%w: %s field of %s: %w", ErrInvalidPackage, item.field, source.Name, err)
 		}
 		item.set(source, deps)
 	}
@@ -168,7 +173,8 @@ func ParseSourceStanza(stanza *Stanza) (*Source, error) {
 	return source, nil
 }
 
-// splitList 按空白与逗号切分列表（Binary 字段可能用空格或逗号分隔）。
+// splitList splits a list on whitespace and commas (the Binary field may be separated by spaces or
+// commas).
 func splitList(value string) []string {
 	value = strings.ReplaceAll(value, "\n", " ")
 	var items []string
@@ -182,7 +188,7 @@ func splitList(value string) []string {
 	return items
 }
 
-// splitCommaList 按逗号切分多行列表（Uploaders 等字段）。
+// splitCommaList splits a multi-line list on commas (fields such as Uploaders).
 func splitCommaList(value string) []string {
 	value = strings.ReplaceAll(value, "\n", " ")
 	var items []string
@@ -194,7 +200,7 @@ func splitCommaList(value string) []string {
 	return items
 }
 
-// ID 返回形如 "nginx_1.22.1-9" 的源码包标识。
+// ID returns a source package identifier of the form "nginx_1.22.1-9".
 func (s *Source) ID() string {
 	if s.Version.IsZero() {
 		return s.Name
@@ -202,19 +208,19 @@ func (s *Source) ID() string {
 	return s.Name + "_" + s.Version.String()
 }
 
-// String 返回源码包标识（与 ID 相同）。
+// String returns the source package identifier (the same as ID).
 func (s *Source) String() string { return s.ID() }
 
-// Field 返回索引中的原始字段值，字段名不区分大小写。
+// Field returns the raw field value from the index; the field name is case-insensitive.
 func (s *Source) Field(name string) string { return s.Fields[strings.ToLower(name)] }
 
-// HasField 判断索引中是否存在指定字段。
+// HasField reports whether the given field exists in the index.
 func (s *Source) HasField(name string) bool {
 	_, ok := s.Fields[strings.ToLower(name)]
 	return ok
 }
 
-// ChecksumOf 返回源码包中某个文件最强算法的校验值。
+// ChecksumOf returns the checksum of a file in the source package using the strongest algorithm.
 func (s *Source) ChecksumOf(name string) (Checksum, bool) {
 	for _, algo := range []string{"sha512", "sha256", "sha1", "md5"} {
 		for _, entry := range s.Checksums[algo] {
@@ -226,7 +232,7 @@ func (s *Source) ChecksumOf(name string) (Checksum, bool) {
 	return Checksum{}, false
 }
 
-// DSC 返回源码包中的 .dsc 文件条目。
+// DSC returns the .dsc file entry of the source package.
 func (s *Source) DSC() (FileEntry, bool) {
 	for _, entry := range s.Files {
 		if strings.HasSuffix(entry.Path, ".dsc") {
@@ -236,18 +242,18 @@ func (s *Source) DSC() (FileEntry, bool) {
 	return FileEntry{}, false
 }
 
-// FileURL 返回源码包中某个文件（例如 .dsc 或 .orig.tar.gz）的下载地址。
-// 需要仓库已填充 RepoURL 与 Directory。
+// FileURL returns the download address of a file in the source package (for example .dsc or
+// .orig.tar.gz). The repository must have populated RepoURL and Directory.
 func (s *Source) FileURL(name string) (string, error) {
 	if s.RepoURL == "" {
-		return "", fmt.Errorf("debrepo: 源码包 %s 没有仓库地址", s.ID())
+		return "", fmt.Errorf("debrepo: source package %s has no repository address", s.ID())
 	}
 	base, err := url.Parse(s.RepoURL)
 	if err != nil {
-		return "", fmt.Errorf("debrepo: 非法的仓库地址 %q: %w", s.RepoURL, err)
+		return "", fmt.Errorf("debrepo: invalid repository address %q: %w", s.RepoURL, err)
 	}
 	if s.Directory == "" {
-		return "", fmt.Errorf("debrepo: 源码包 %s 没有 Directory 字段", s.ID())
+		return "", fmt.Errorf("debrepo: source package %s has no Directory field", s.ID())
 	}
 	reference := &url.URL{Path: path.Join(s.Directory, name)}
 	return base.ResolveReference(reference).String(), nil

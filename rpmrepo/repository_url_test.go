@@ -22,33 +22,33 @@ func TestNormalizeRepoURL(t *testing.T) {
 		got, err := normalizeRepoURL(tc.in)
 		if tc.wantErr {
 			if err == nil {
-				t.Errorf("normalizeRepoURL(%q) 期望返回错误，实际为 %q", tc.in, got)
+				t.Errorf("normalizeRepoURL(%q) expected an error, got %q", tc.in, got)
 			}
 			continue
 		}
 		if err != nil {
-			t.Errorf("normalizeRepoURL(%q) 失败: %v", tc.in, err)
+			t.Errorf("normalizeRepoURL(%q) failed: %v", tc.in, err)
 			continue
 		}
 		if got.String() != tc.want {
-			t.Errorf("normalizeRepoURL(%q) = %q，期望 %q", tc.in, got.String(), tc.want)
+			t.Errorf("normalizeRepoURL(%q) = %q, want %q", tc.in, got.String(), tc.want)
 		}
 	}
 
-	// 本地目录会被转换为 file 地址。
+	// A local directory is converted into a file address.
 	got, err := normalizeRepoURL("./testdata")
 	if err != nil {
-		t.Fatalf("normalizeRepoURL 失败: %v", err)
+		t.Fatalf("normalizeRepoURL failed: %v", err)
 	}
 	if got.Scheme != "file" || got.Path == "" {
-		t.Errorf("本地路径应当转换为 file 地址，实际为 %q", got.String())
+		t.Errorf("a local path should be converted into a file address, got %q", got.String())
 	}
 }
 
 func TestResolveLocation(t *testing.T) {
 	base, err := url.Parse("https://mirror.example.com/centos/7/x86_64/")
 	if err != nil {
-		t.Fatalf("解析基准地址失败: %v", err)
+		t.Fatalf("parsing the base address failed: %v", err)
 	}
 	cases := []struct {
 		location Location
@@ -63,11 +63,11 @@ func TestResolveLocation(t *testing.T) {
 	for _, tc := range cases {
 		got, err := resolveLocation(base, tc.location)
 		if err != nil {
-			t.Errorf("resolveLocation(%+v) 失败: %v", tc.location, err)
+			t.Errorf("resolveLocation(%+v) failed: %v", tc.location, err)
 			continue
 		}
 		if got != tc.want {
-			t.Errorf("resolveLocation(%+v) = %q，期望 %q", tc.location, got, tc.want)
+			t.Errorf("resolveLocation(%+v) = %q, want %q", tc.location, got, tc.want)
 		}
 	}
 }

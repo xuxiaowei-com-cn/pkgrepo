@@ -12,72 +12,78 @@ import (
 	"strings"
 )
 
-// IndexKind 是索引类型。
+// IndexKind is the index type.
 type IndexKind string
 
 const (
-	// IndexPackages 是二进制包索引（Packages、Packages.gz…）。
+	// IndexPackages is the binary package index (Packages, Packages.gz, ...).
 	IndexPackages IndexKind = "Packages"
-	// IndexSources 是源码包索引（Sources、Sources.gz…）。
+	// IndexSources is the source package index (Sources, Sources.gz, ...).
 	IndexSources IndexKind = "Sources"
 )
 
-// IndexFile 是索引文件的一个候选（同一种索引的某种压缩格式）。
+// IndexFile is one candidate of an index file (a given index in a given compression format).
 type IndexFile struct {
-	// Path 是相对仓库根的路径。
+	// Path is the path relative to the repository root.
 	Path string `json:"path"`
-	// URL 是绝对地址。
+	// URL is the absolute address.
 	URL string `json:"url"`
-	// Size 是文件大小（字节），来自 Release，未知时为 0。
+	// Size is the file size in bytes, taken from the Release file; it is 0 when unknown.
 	Size int64 `json:"size,omitempty"`
-	// Checksum 是文件指纹，来自 Release，未知时为空。
+	// Checksum is the file checksum, taken from the Release file; it is empty when unknown.
 	Checksum Checksum `json:"checksum,omitempty"`
-	// ByHash 表示该候选来自 by-hash 目录。
+	// ByHash indicates that this candidate comes from a by-hash directory.
 	ByHash bool `json:"by_hash,omitempty"`
 }
 
-// Index 是一个逻辑索引（组件 + 架构 + 类型）及其候选文件。
-// 候选按压缩格式的优先级排序：xz、zst、gz、bz2、lz4、未压缩；
-// 每个候选后面可能跟着对应的 by-hash 地址。
+// Index is a logical index (component + architecture + type) together with its candidate files.
+// The candidates are ordered by compression format preference: xz, zst, gz, bz2, lz4, uncompressed;
+// each candidate may be followed by its corresponding by-hash address.
 type Index struct {
-	// Kind 是索引类型。
+	// Kind is the index type.
 	Kind IndexKind `json:"kind"`
-	// Suite、Component、Architecture 是该索引对应的发行版、组件与架构。
+	// Suite, Component, and Architecture are the distribution, component, and architecture this
+	// index belongs to.
 	Suite        string `json:"suite"`
 	Component    string `json:"component"`
 	Architecture string `json:"architecture,omitempty"`
-	// Path、URL、Size、Checksum 是首选候选（与 Candidates[0] 相同）。
+	// Path, URL, Size, and Checksum describe the preferred candidate (the same as Candidates[0]).
 	Path     string   `json:"path"`
 	URL      string   `json:"url"`
 	Size     int64    `json:"size,omitempty"`
 	Checksum Checksum `json:"checksum,omitempty"`
-	// Candidates 是所有可用的候选文件。
+	// Candidates holds every available candidate file.
 	Candidates []IndexFile `json:"candidates,omitempty"`
-	// FromRelease 表示该索引在 Release 文件中有记录（即仓库确实提供该索引）。
+	// FromRelease indicates that the index is recorded in the Release file (that is, the repository
+	// really provides this index).
 	FromRelease bool `json:"from_release"`
 }
 
-// Repository 是一个已解析 Release 元数据的 deb 仓库。
+// Repository is a deb repository whose Release metadata has been parsed.
 type Repository struct {
-	// URL 是调用方传入的仓库地址。
+	// URL is the repository address passed in by the caller.
 	URL string
-	// BaseURL 是规范化后的仓库根地址（以 / 结尾），pool/ 与 dists/ 都在其下。
+	// BaseURL is the normalized repository root address (ending with /), below which pool/ and
+	// dists/ live.
 	BaseURL *url.URL
-	// ID 是由仓库地址推导出的标识，例如 deb.debian.org/debian。
+	// ID is the identifier derived from the repository address, for example deb.debian.org/debian.
 	ID string
-	// Suite 是发行版套件/代号，Codename 是 Release 中的代号（可能为空）。
+	// Suite is the distribution suite/codename; Codename is the codename from the Release file (which
+	// may be empty).
 	Suite    string
 	Codename string
-	// Components 与 Architectures 是实际扫描的组件与架构列表。
-	// 为了兼容 Debian 13 起的 binary-all 索引，Architectures 可能包含 "all"。
+	// Components and Architectures are the components and architectures actually scanned.
+	// Architectures may contain "all" so that the binary-all indexes introduced in Debian 13 are
+	// covered.
 	Components    []string
 	Architectures []string
-	// Release 是 Release/InRelease 的解析结果；当地址直接指向索引文件且读不到
-	// Release 时为 nil。
+	// Release is the parse result of Release/InRelease; it is nil when the address points directly at
+	// an index file and no Release file can be read.
 	Release *Release
-	// ReleaseURL 是实际使用的 Release/InRelease 地址（可能为空）。
+	// ReleaseURL is the Release/InRelease address actually used (which may be empty).
 	ReleaseURL string
-	// InRelease 表示元数据来自签名的 InRelease 文件（本 SDK 不做签名校验）。
+	// InRelease indicates that the metadata came from a signed InRelease file (this SDK does not
+	// verify signatures).
 	InRelease bool
 
 	binaryIndexes []Index
@@ -86,11 +92,12 @@ type Repository struct {
 	fetcher       Fetcher
 }
 
-// Open 读取并解析仓库元数据（dists/<suite>/Release 或 InRelease）。
+// Open reads and parses the repository metadata (dists/<suite>/Release or InRelease).
 //
-// repoURL 可以是仓库根地址（https://deb.debian.org/debian）、发行版地址
-// （…/dists/bookworm）、组件/架构目录（…/dists/bookworm/main/binary-amd64），
-// 也可以是具体的索引地址（…/main/binary-amd64/Packages.gz）或本地目录。
+// repoURL can be the repository root address (https://deb.debian.org/debian), a distribution address
+// (.../dists/bookworm), a component/architecture directory
+// (.../dists/bookworm/main/binary-amd64), a specific index address
+// (.../main/binary-amd64/Packages.gz), or a local directory.
 func (c *Client) Open(ctx context.Context, repoURL string) (*Repository, error) {
 	location, err := parseRepoURL(repoURL)
 	if err != nil {
@@ -120,15 +127,17 @@ func (c *Client) Open(ctx context.Context, repoURL string) (*Repository, error) 
 			repo.Codename = release.Codename
 		}
 		if location.kind != "" {
-			// 地址直接指向索引时，以地址中的组件/架构为准（Release 只用来校验与发现）。
+			// When the address points directly at an index, the component and architecture from the
+			// address take precedence (the Release file is only used for verification and
+			// discovery).
 			repo.Components = []string{firstNonEmpty(location.component, defaultComponent(release))}
 			repo.Architectures = []string{firstNonEmpty(location.architecture, HostArchitecture())}
 		}
 	case location.indexURL == "":
 		return nil, err
 	default:
-		// 地址直接指向索引文件，且仓库没有 Release（例如自建的小仓库），
-		// 直接用调用方给出的地址。
+		// The address points directly at an index file and the repository has no Release file (for
+		// example a small self-hosted repository), so use the address given by the caller as is.
 		repo.Components = []string{firstNonEmpty(location.component, "main")}
 		repo.Architectures = []string{firstNonEmpty(location.architecture, HostArchitecture())}
 		kind := location.kind
@@ -170,7 +179,8 @@ func (c *Client) Open(ctx context.Context, repoURL string) (*Repository, error) 
 	return repo, nil
 }
 
-// openRelease 依次尝试 InRelease 与 Release，返回解析结果与实际使用的地址。
+// openRelease tries InRelease and then Release, returning the parse result and the address actually
+// used.
 func (c *Client) openRelease(ctx context.Context, fetcher Fetcher, base *url.URL, suite string) (*Release, string, bool, error) {
 	candidates := []struct {
 		name      string
@@ -193,7 +203,7 @@ func (c *Client) openRelease(ctx context.Context, fetcher Fetcher, base *url.URL
 		release, err := ParseRelease(body)
 		body.Close()
 		if err != nil {
-			lastErr = fmt.Errorf("%w（%s）: %w", ErrNotRepository, releaseURL, err)
+			lastErr = fmt.Errorf("%w (%s): %w", ErrNotRepository, releaseURL, err)
 			continue
 		}
 		return release, releaseURL, candidate.inRelease, nil
@@ -201,14 +211,16 @@ func (c *Client) openRelease(ctx context.Context, fetcher Fetcher, base *url.URL
 	if lastErr == nil {
 		lastErr = ErrNotRepository
 	}
-	// base 一定以 "/" 结尾（dists 目录就在仓库根下）。
-	return nil, "", false, fmt.Errorf("%w（%sdists/%s/）: %w", ErrNotRepository, base, suite, lastErr)
+	// base always ends with "/" (the dists directory lives right below the repository root).
+	return nil, "", false, fmt.Errorf("%w (%sdists/%s/): %w", ErrNotRepository, base, suite, lastErr)
 }
 
-// resolveComponents 决定最终扫描的组件列表。
+// resolveComponents decides the final list of components to scan.
 //
-// 优先级：WithComponent 显式指定 > 地址中推断 > Release 中的 main > Release 中的全部组件。
-// WithComponent("*")、WithComponent("any") 表示扫描 Release 中列出的全部组件。
+// Precedence: an explicit WithComponent > what can be inferred from the address > main from the
+// Release file > every component in the Release file.
+// WithComponent("*") and WithComponent("any") mean scanning every component listed in the Release
+// file.
 func (c *Client) resolveComponents(location *repoLocation, release *Release) []string {
 	components := c.components
 	if len(components) == 0 && location.component != "" {
@@ -229,7 +241,8 @@ func (c *Client) resolveComponents(location *repoLocation, release *Release) []s
 	return []string{"main"}
 }
 
-// defaultComponent 返回仓库的默认组件：优先 main，其次 Release 中的第一个组件。
+// defaultComponent returns the default component of the repository: main if present, otherwise the
+// first component in the Release file.
 func defaultComponent(release *Release) string {
 	if release == nil || len(release.Components) == 0 {
 		return "main"
@@ -242,10 +255,12 @@ func defaultComponent(release *Release) string {
 	return release.Components[0]
 }
 
-// resolveArchitectures 决定最终扫描的架构列表。
+// resolveArchitectures decides the final list of architectures to scan.
 //
-// 优先级：WithArchitecture 显式指定 > 地址中推断 > 宿主机架构。
-// WithArchitecture("any")、WithArchitecture("*") 表示扫描 Release 中列出的全部架构。
+// Precedence: an explicit WithArchitecture > what can be inferred from the address > the host
+// architecture.
+// WithArchitecture("any") and WithArchitecture("*") mean scanning every architecture listed in the
+// Release file.
 func (c *Client) resolveArchitectures(location *repoLocation, release *Release) []string {
 	architectures := c.architectures
 	if len(architectures) == 0 && location.architecture != "" {
@@ -263,11 +278,13 @@ func (c *Client) resolveArchitectures(location *repoLocation, release *Release) 
 	return []string{HostArchitecture()}
 }
 
-// sourceArchitectures 返回源码包索引使用的架构列表（源码索引与架构无关）。
+// sourceArchitectures returns the architecture list used by source package indexes (source indexes
+// are architecture-independent).
 func (r *Repository) sourceArchitectures() []string { return []string{""} }
 
-// buildIndexes 为每个"组件 + 架构"组合生成索引与候选文件。
-// release 非空时只使用 Release 中记录的索引；为空时按惯例猜测各压缩格式。
+// buildIndexes builds an index and its candidate files for every "component + architecture"
+// combination. When release is non-nil only the indexes recorded in the Release file are used; when
+// it is nil the compression formats are guessed by convention.
 func (r *Repository) buildIndexes(kind IndexKind, release *Release, components, architectures []string) []Index {
 	var indexes []Index
 	for _, component := range components {
@@ -275,8 +292,9 @@ func (r *Repository) buildIndexes(kind IndexKind, release *Release, components, 
 			continue
 		}
 		arches := architectures
-		// Debian 13（trixie）起架构无关包只出现在 binary-all 索引中，
-		// 因此每个组件都要额外扫描 binary-all（如果仓库提供的话）。
+		// Starting with Debian 13 (trixie) architecture-independent packages only appear in the
+		// binary-all index, so every component must additionally scan binary-all (when the
+		// repository provides it).
 		if kind == IndexPackages && release != nil && !containsString(architectures, "all") &&
 			releaseHasIndex(release, component, "binary-all", "Packages") {
 			arches = append(append([]string(nil), architectures...), "all")
@@ -292,7 +310,8 @@ func (r *Repository) buildIndexes(kind IndexKind, release *Release, components, 
 	return indexes
 }
 
-// releaseHasIndex 判断 Release 中是否记录了某个组件目录下的索引（任意压缩格式）。
+// releaseHasIndex reports whether the Release file records an index in a component directory (in any
+// compression format).
 func releaseHasIndex(release *Release, component, archDirectory, name string) bool {
 	if release == nil {
 		return false
@@ -305,7 +324,8 @@ func releaseHasIndex(release *Release, component, archDirectory, name string) bo
 	return false
 }
 
-// indexArchitectures 汇总索引中实际出现的架构，保持顺序。
+// indexArchitectures collects the architectures that actually occur in the indexes, preserving their
+// order.
 func indexArchitectures(indexes []Index) []string {
 	seen := make(map[string]bool, len(indexes))
 	var architectures []string
@@ -342,7 +362,8 @@ func (r *Repository) buildIndex(kind IndexKind, release *Release, component, arc
 	if kind == IndexSources {
 		index.Architecture = ""
 	}
-	// Release 中的路径是相对 dists/<suite>/ 的；仓库中的路径则要带上 dists/<suite>/。
+	// Paths in the Release file are relative to dists/<suite>/; paths in the repository must include
+	// dists/<suite>/.
 	releaseBase := path.Join(component, directory)
 	base := path.Join("dists", r.Suite, releaseBase)
 	for _, extension := range IndexCompressions {
@@ -381,7 +402,8 @@ func (r *Repository) buildIndex(kind IndexKind, release *Release, component, arc
 			}
 		}
 		index.Candidates = append(index.Candidates, candidate)
-		// 没有 Release 时无法知道仓库提供哪种压缩格式，保留全部候选依次尝试。
+		// Without a Release file there is no way to know which compression formats the repository
+		// provides, so keep every candidate and try them in turn.
 	}
 	if len(index.Candidates) > 0 {
 		index.Path = index.Candidates[0].Path
@@ -392,8 +414,8 @@ func (r *Repository) buildIndex(kind IndexKind, release *Release, component, arc
 	return index
 }
 
-// byHashURL 把索引地址转换为 apt 的 by-hash 地址。
-// 例如 main/binary-amd64/Packages.xz → main/binary-amd64/by-hash/SHA256/<sha256>。
+// byHashURL converts an index address into apt's by-hash address.
+// For example main/binary-amd64/Packages.xz -> main/binary-amd64/by-hash/SHA256/<sha256>.
 func byHashURL(fileURL string, checksum Checksum) (string, error) {
 	algorithm := byHashAlgorithm(checksum.Type)
 	if algorithm == "" {
@@ -407,7 +429,7 @@ func byHashURL(fileURL string, checksum Checksum) (string, error) {
 	return parsed.String(), nil
 }
 
-// byHashAlgorithm 返回 by-hash 目录使用的算法名。
+// byHashAlgorithm returns the algorithm name used by the by-hash directory.
 func byHashAlgorithm(algo string) string {
 	switch strings.ToLower(strings.TrimSpace(algo)) {
 	case "md5":
@@ -423,31 +445,32 @@ func byHashAlgorithm(algo string) string {
 	}
 }
 
-// Indexes 返回二进制包索引列表。
+// Indexes returns the list of binary package indexes.
 func (r *Repository) Indexes() []Index {
 	return append([]Index(nil), r.binaryIndexes...)
 }
 
-// SourceIndexes 返回源码包索引列表。
+// SourceIndexes returns the list of source package indexes.
 func (r *Repository) SourceIndexes() []Index {
 	return append([]Index(nil), r.sourceIndexes...)
 }
 
-// FileURL 把仓库内的相对路径解析为绝对地址。
+// FileURL resolves a path inside the repository into an absolute address.
 func (r *Repository) FileURL(relativePath string) (string, error) {
 	relativePath = strings.TrimPrefix(strings.TrimSpace(relativePath), "/")
 	return resolveURL(r.BaseURL, relativePath)
 }
 
-// Scan 流式遍历仓库中的所有二进制软件包，每读到一个包就调用一次 fn（内存占用恒定）。
+// Scan streams over every binary package in the repository, calling fn once per package (constant
+// memory usage).
 //
-// 返回的 Package 已填充 DownloadURL、RepoURL、RepoID、Suite、Component。
+// The returned Package has DownloadURL, RepoURL, RepoID, Suite, and Component populated.
 func (r *Repository) Scan(ctx context.Context, fn func(*Package) error) error {
 	if fn == nil {
 		return nil
 	}
 	if len(r.binaryIndexes) == 0 {
-		return fmt.Errorf("%w: 仓库 %s 中没有可用的 Packages 索引", ErrIndexNotFound, r.ID)
+		return fmt.Errorf("%w: repository %s has no usable Packages index", ErrIndexNotFound, r.ID)
 	}
 	for _, index := range r.binaryIndexes {
 		if err := r.scanBinaryIndex(ctx, index, fn); err != nil {
@@ -477,13 +500,13 @@ func (r *Repository) scanBinaryIndex(ctx context.Context, index Index, fn func(*
 	})
 }
 
-// ScanSources 流式遍历仓库中的所有源码包。
+// ScanSources streams over every source package in the repository.
 func (r *Repository) ScanSources(ctx context.Context, fn func(*Source) error) error {
 	if fn == nil {
 		return nil
 	}
 	if len(r.sourceIndexes) == 0 {
-		return fmt.Errorf("%w: 仓库 %s 中没有可用的 Sources 索引", ErrIndexNotFound, r.ID)
+		return fmt.Errorf("%w: repository %s has no usable Sources index", ErrIndexNotFound, r.ID)
 	}
 	for _, index := range r.sourceIndexes {
 		if err := r.scanSourceIndex(ctx, index, fn); err != nil {
@@ -508,12 +531,13 @@ func (r *Repository) scanSourceIndex(ctx context.Context, index Index, fn func(*
 	})
 }
 
-// Packages 返回仓库中的所有二进制软件包（注意：大型仓库会占用较多内存）。
+// Packages returns every binary package in the repository (note that large repositories consume a
+// lot of memory).
 func (r *Repository) Packages(ctx context.Context) ([]Package, error) {
 	return r.FindPackages(ctx, Query{})
 }
 
-// FindPackages 返回满足 q 的所有二进制软件包。
+// FindPackages returns every binary package matching q.
 func (r *Repository) FindPackages(ctx context.Context, q Query) ([]Package, error) {
 	pkgs := make([]Package, 0, 16)
 	err := r.Scan(ctx, func(pkg *Package) error {
@@ -535,7 +559,7 @@ func (r *Repository) FindPackages(ctx context.Context, q Query) ([]Package, erro
 	return pkgs, nil
 }
 
-// FindPackage 返回版本最新的匹配包，找不到时返回 ErrPackageNotFound。
+// FindPackage returns the newest matching package, or ErrPackageNotFound when there is none.
 func (r *Repository) FindPackage(ctx context.Context, q Query) (*Package, error) {
 	q.Latest = true
 	q.Limit = 1
@@ -549,12 +573,13 @@ func (r *Repository) FindPackage(ctx context.Context, q Query) (*Package, error)
 	return &pkgs[0], nil
 }
 
-// Sources 返回仓库中的所有源码包（注意：大型仓库会占用较多内存）。
+// Sources returns every source package in the repository (note that large repositories consume a
+// lot of memory).
 func (r *Repository) Sources(ctx context.Context) ([]Source, error) {
 	return r.FindSources(ctx, SourceQuery{})
 }
 
-// FindSources 返回满足 q 的所有源码包。
+// FindSources returns every source package matching q.
 func (r *Repository) FindSources(ctx context.Context, q SourceQuery) ([]Source, error) {
 	sources := make([]Source, 0, 16)
 	err := r.ScanSources(ctx, func(source *Source) error {
@@ -576,7 +601,7 @@ func (r *Repository) FindSources(ctx context.Context, q SourceQuery) ([]Source, 
 	return sources, nil
 }
 
-// FindSource 返回版本最新的匹配源码包，找不到时返回 ErrPackageNotFound。
+// FindSource returns the newest matching source package, or ErrPackageNotFound when there is none.
 func (r *Repository) FindSource(ctx context.Context, q SourceQuery) (*Source, error) {
 	q.Latest = true
 	q.Limit = 1
@@ -590,8 +615,8 @@ func (r *Repository) FindSource(ctx context.Context, q SourceQuery) (*Source, er
 	return &sources[0], nil
 }
 
-// openIndex 依次尝试索引的所有候选（xz、zst、gz、bz2、lz4、未压缩，以及
-// by-hash 地址），返回解压后的数据流。
+// openIndex tries every candidate of the index in turn (xz, zst, gz, bz2, lz4, uncompressed, and the
+// by-hash addresses) and returns the decompressed data stream.
 func (r *Repository) openIndex(ctx context.Context, index Index) (io.ReadCloser, error) {
 	var firstErr, lastErr error
 	for _, candidate := range index.Candidates {
@@ -611,10 +636,11 @@ func (r *Repository) openIndex(ctx context.Context, index Index) (io.ReadCloser,
 	if lastErr == nil {
 		lastErr = ErrIndexNotFound
 	}
-	return nil, fmt.Errorf("debrepo: 读取 %s 索引失败（%s）: %w", index.Kind, index.Path, lastErr)
+	return nil, fmt.Errorf("debrepo: reading the %s index failed (%s): %w", index.Kind, index.Path, lastErr)
 }
 
-// openIndexFile 打开一个索引候选：下载、按需校验（校验的是压缩后的文件本身）、解压。
+// openIndexFile opens one index candidate: download, verify when needed (the verification covers the
+// compressed file itself), and decompress.
 func (r *Repository) openIndexFile(ctx context.Context, candidate IndexFile) (io.ReadCloser, error) {
 	raw, err := r.fetcher.Open(ctx, candidate.URL)
 	if err != nil {
@@ -644,12 +670,14 @@ func (r *Repository) openIndexFile(ctx context.Context, candidate IndexFile) (io
 	if verifier == nil {
 		return body, nil
 	}
-	// 压缩数据的校验值针对的是压缩后的文件本身，而解压器可能在压缩流结束处
-	// 就停止读取，因此读完解压流后要把底层数据读完以触发校验。
+	// The checksum of compressed data covers the compressed file itself, and the decompressor may
+	// stop reading at the end of the compressed stream, so the underlying data must be drained after
+	// the decompressed stream is exhausted in order to trigger verification.
 	return &verifyDrainReader{ReadCloser: body, verifier: verifier}, nil
 }
 
-// verifyDrainReader 在解压流读到结尾时把底层数据读完，从而完成校验。
+// verifyDrainReader drains the underlying data once the decompressed stream reaches the end, which
+// completes the verification.
 type verifyDrainReader struct {
 	io.ReadCloser
 	verifier *verifyReader
@@ -668,10 +696,10 @@ func (v *verifyDrainReader) Read(p []byte) (int, error) {
 	return n, err
 }
 
-// HostArchitecture 返回宿主机对应的 Debian 架构名。
+// HostArchitecture returns the Debian architecture name corresponding to the host.
 func HostArchitecture() string { return dpkgArchitecture(runtime.GOARCH) }
 
-// dpkgArchitecture 把 Go 的 GOARCH 映射为 Debian 的架构名。
+// dpkgArchitecture maps Go's GOARCH to a Debian architecture name.
 func dpkgArchitecture(goarch string) string {
 	switch goarch {
 	case "amd64":
@@ -705,7 +733,7 @@ func dpkgArchitecture(goarch string) string {
 	}
 }
 
-// repoLocation 是从仓库地址中解析出的信息。
+// repoLocation holds the information parsed out of a repository address.
 type repoLocation struct {
 	base         *url.URL
 	suite        string
@@ -717,41 +745,41 @@ type repoLocation struct {
 	indexURL     string
 }
 
-// parseRepoURL 解析仓库地址，支持仓库根地址、发行版地址、组件目录、
-// 具体索引文件地址以及本地目录。
+// parseRepoURL parses a repository address; it supports the repository root address, a distribution
+// address, a component directory, a specific index file address, and a local directory.
 func parseRepoURL(rawURL string) (*repoLocation, error) {
 	rawURL = strings.TrimSpace(rawURL)
 	if rawURL == "" {
-		return nil, errors.New("debrepo: 仓库地址不能为空")
+		return nil, errors.New("debrepo: repository address must not be empty")
 	}
 	if !strings.Contains(rawURL, "://") {
 		absolute, err := filepath.Abs(rawURL)
 		if err != nil {
-			return nil, fmt.Errorf("debrepo: 解析本地仓库路径 %q 失败: %w", rawURL, err)
+			return nil, fmt.Errorf("debrepo: resolving local repository path %q failed: %w", rawURL, err)
 		}
 		rawURL = (&url.URL{Scheme: "file", Path: filepath.ToSlash(absolute)}).String()
 	}
 	parsed, err := url.Parse(rawURL)
 	if err != nil {
-		return nil, fmt.Errorf("debrepo: 非法的仓库地址 %q: %w", rawURL, err)
+		return nil, fmt.Errorf("debrepo: invalid repository address %q: %w", rawURL, err)
 	}
 	switch strings.ToLower(parsed.Scheme) {
 	case "http", "https", "file":
 	default:
-		return nil, fmt.Errorf("debrepo: 不支持的仓库地址协议 %q", parsed.Scheme)
+		return nil, fmt.Errorf("debrepo: unsupported repository address scheme %q", parsed.Scheme)
 	}
 
 	location := &repoLocation{}
 	segments := splitPath(parsed.Path)
-	// 地址直接指向具体文件时，先摘出文件名。
+	// When the address points directly at a specific file, extract the file name first.
 	var indexFile string
 	if len(segments) > 0 && isRepoFileName(segments[len(segments)-1]) {
 		indexFile = segments[len(segments)-1]
 		segments = segments[:len(segments)-1]
 		if kind := indexKindOf(indexFile); kind != "" {
 			location.kind = kind
-			// 只有 Packages/Sources 索引才允许在 Release 不可用时直接使用，
-			// 传入 Release/InRelease 地址时仍然按 suite 去读取元数据。
+			// Only a Packages/Sources index may be used directly when no Release file is available;
+			// passing a Release/InRelease address still reads the metadata by suite.
 			location.indexURL = parsed.String()
 		} else {
 			indexFile = ""
@@ -779,7 +807,8 @@ func parseRepoURL(rawURL string) (*repoLocation, error) {
 	for _, segment := range rest {
 		switch {
 		case segment == "by-hash":
-			// by-hash/<算法>/<摘要>，无法从地址推断索引文件名，交给 Release 发现。
+			// by-hash/<algorithm>/<digest>: the index file name cannot be inferred from the address,
+			// so leave discovery to the Release file.
 			goto done
 		case segment == "source":
 			location.kind = IndexSources
@@ -810,7 +839,7 @@ done:
 	return location, nil
 }
 
-// splitPath 把 URL 路径按 "/" 切分成非空片段。
+// splitPath splits a URL path on "/" into non-empty segments.
 func splitPath(p string) []string {
 	var segments []string
 	for _, segment := range strings.Split(p, "/") {
@@ -821,7 +850,7 @@ func splitPath(p string) []string {
 	return segments
 }
 
-// isRepoFileName 判断路径末段是否是本 SDK 会直接读取的文件名。
+// isRepoFileName reports whether the last segment of a path is a file name this SDK reads directly.
 func isRepoFileName(name string) bool {
 	switch {
 	case name == "InRelease", name == "Release", name == "Release.gpg":
@@ -831,7 +860,7 @@ func isRepoFileName(name string) bool {
 	}
 }
 
-// indexKindOf 根据索引文件名判断类型。
+// indexKindOf determines the index type from an index file name.
 func indexKindOf(name string) IndexKind {
 	switch {
 	case strings.HasPrefix(name, "Packages"):
@@ -851,7 +880,7 @@ func withTrailingSlash(u *url.URL) *url.URL {
 	return &clone
 }
 
-// repoID 由仓库地址生成一个稳定的标识。
+// repoID derives a stable identifier from the repository address.
 func repoID(u *url.URL) string {
 	id := u.Host + strings.TrimSuffix(u.Path, "/")
 	if u.Scheme == "file" {
@@ -860,11 +889,11 @@ func repoID(u *url.URL) string {
 	return strings.Trim(id, "/")
 }
 
-// resolveURL 把仓库内的相对地址解析为绝对地址。
+// resolveURL resolves a relative address inside the repository into an absolute one.
 func resolveURL(base *url.URL, reference string) (string, error) {
 	parsed, err := url.Parse(strings.TrimSpace(reference))
 	if err != nil {
-		return "", fmt.Errorf("debrepo: 非法的相对地址 %q: %w", reference, err)
+		return "", fmt.Errorf("debrepo: invalid relative address %q: %w", reference, err)
 	}
 	if parsed.IsAbs() {
 		return parsed.String(), nil

@@ -7,21 +7,23 @@ import (
 	"strings"
 )
 
-// Size 是软件包的大小信息。
+// Size holds the size information of a package.
 type Size struct {
-	// File 是 .deb 文件大小（字节），对应索引中的 Size 字段。
+	// File is the size of the .deb file in bytes, corresponding to the Size field in the index.
 	File int64 `json:"file"`
-	// Installed 是安装后占用的磁盘空间（KiB），对应索引中的 Installed-Size 字段。
+	// Installed is the disk space used after installation (KiB), corresponding to the
+	// Installed-Size field in the index.
 	Installed int64 `json:"installed"`
 }
 
-// Description 是软件包的描述：Synopsis 是首行摘要，Long 是完整描述。
+// Description is the description of a package: Synopsis is the first-line summary and Long is the
+// full description.
 type Description struct {
 	Synopsis string `json:"synopsis,omitempty"`
 	Long     string `json:"long,omitempty"`
 }
 
-// String 返回完整描述（摘要 + 长描述）。
+// String returns the full description (summary plus long description).
 func (d Description) String() string {
 	if d.Long == "" {
 		return d.Synopsis
@@ -32,50 +34,54 @@ func (d Description) String() string {
 	return d.Synopsis + "\n" + d.Long
 }
 
-// IsZero 判断描述是否为空。
+// IsZero reports whether the description is empty.
 func (d Description) IsZero() bool { return d.Synopsis == "" && d.Long == "" }
 
-// Package 是一个二进制软件包的元数据，对应 Packages 索引中的一个段落。
+// Package is the metadata of a single binary package, corresponding to one paragraph in the Packages
+// index.
 //
-// 字段名与 Debian 控制文件保持一致；此外还包含由仓库自动填充的
-// DownloadURL、RepoURL、RepoID、Suite、Component 等上下文信息。
+// The field names match those of the Debian control file; the struct also carries context such as
+// DownloadURL, RepoURL, RepoID, Suite, and Component, which the repository fills in automatically.
 type Package struct {
-	// Name 是软件包名称。
+	// Name is the package name.
 	Name string `json:"name"`
-	// Source 是源码包名称，SourceVersion 是 Source 字段中括号里的版本（通常为空）。
+	// Source is the source package name and SourceVersion is the version in parentheses inside the
+	// Source field (usually empty).
 	Source        string `json:"source,omitempty"`
 	SourceVersion string `json:"source_version,omitempty"`
-	// Version 是版本号（epoch:upstream-revision）。
+	// Version is the version number (epoch:upstream-revision).
 	Version Version `json:"version"`
-	// Architecture 是架构，例如 amd64、arm64、all。
+	// Architecture is the architecture, for example amd64, arm64, or all.
 	Architecture string `json:"architecture"`
-	// MultiArch 是 Multi-Arch 标记：same、foreign、allowed、no。
+	// MultiArch is the Multi-Arch flag: same, foreign, allowed, or no.
 	MultiArch string `json:"multi_arch,omitempty"`
-	// Essential 表示该包是系统必需包。
+	// Essential indicates that the package is required by the system.
 	Essential bool `json:"essential,omitempty"`
-	// Priority 是优先级（required、important、standard、optional、extra）。
+	// Priority is the priority (required, important, standard, optional, extra).
 	Priority string `json:"priority,omitempty"`
-	// Section 是软件分类（如 utils、net）。
+	// Section is the software category (such as utils or net).
 	Section string `json:"section,omitempty"`
-	// Description 是摘要与完整描述。
+	// Description is the summary and the full description.
 	Description Description `json:"description,omitempty"`
-	// Maintainer 是维护者，OriginalMaintainer 是原始维护者（Ubuntu 的 XSBC-Original-Maintainer）。
+	// Maintainer is the maintainer and OriginalMaintainer is the original maintainer (Ubuntu's
+	// XSBC-Original-Maintainer).
 	Maintainer         string `json:"maintainer,omitempty"`
 	OriginalMaintainer string `json:"original_maintainer,omitempty"`
-	// Homepage 是上游项目地址。
+	// Homepage is the upstream project address.
 	Homepage string `json:"homepage,omitempty"`
 
-	// Size 是包文件大小与安装后占用空间。
+	// Size is the package file size and the installed size.
 	Size Size `json:"size"`
-	// Filename 是包文件相对仓库根的路径，例如
-	// pool/main/n/nginx/nginx_1.22.1-9_amd64.deb。
+	// Filename is the path of the package file relative to the repository root, for example
+	// pool/main/n/nginx/nginx_1.22.1-9_amd64.deb.
 	Filename string `json:"filename"`
-	// DownloadURL 是解析后的绝对下载地址，由仓库加载时填充。
+	// DownloadURL is the resolved absolute download address; it is populated when the repository
+	// loads the package.
 	DownloadURL string `json:"download_url,omitempty"`
-	// Checksums 是包文件的指纹（MD5/SHA1/SHA256/SHA512）。
+	// Checksums are the checksums of the package file (MD5/SHA1/SHA256/SHA512).
 	Checksums Checksums `json:"checksums"`
 
-	// 依赖关系，与 Debian 字段一一对应。
+	// Dependency relations, one for one with the Debian fields.
 	Depends    Dependencies `json:"depends,omitempty"`
 	PreDepends Dependencies `json:"pre_depends,omitempty"`
 	Recommends Dependencies `json:"recommends,omitempty"`
@@ -85,22 +91,23 @@ type Package struct {
 	Provides   Dependencies `json:"provides,omitempty"`
 	Replaces   Dependencies `json:"replaces,omitempty"`
 	Enhances   Dependencies `json:"enhances,omitempty"`
-	// BuiltUsing 是构建该包时用到的源码包（Built-Using 字段）。
+	// BuiltUsing lists the source packages used to build this package (the Built-Using field).
 	BuiltUsing Dependencies `json:"built_using,omitempty"`
 
-	// Suite、Component 是该包所属的发行版与组件。
+	// Suite and Component are the distribution and component the package belongs to.
 	Suite     string `json:"suite,omitempty"`
 	Component string `json:"component,omitempty"`
-	// RepoURL 是包所属仓库的根地址，RepoID 是仓库标识。
+	// RepoURL is the root address of the repository the package belongs to and RepoID is the
+	// repository identifier.
 	RepoURL string `json:"repo_url,omitempty"`
 	RepoID  string `json:"repo_id,omitempty"`
 
-	// Fields 保存索引中的所有字段（键为小写字段名），便于读取 Tag、Task、
-	// Bugs、Package-Type 等没有进入结构体的字段。
+	// Fields holds every field of the index (keyed by lower-case field name), which makes fields that
+	// have no struct counterpart — Tag, Task, Bugs, Package-Type, and so on — easy to read.
 	Fields map[string]string `json:"fields,omitempty"`
 }
 
-// dependencyFields 是 Package 中需要解析为依赖关系的字段。
+// packageDependencyFields lists the Package fields that must be parsed as dependency relations.
 var packageDependencyFields = []struct {
 	field string
 	set   func(*Package, Dependencies)
@@ -117,10 +124,11 @@ var packageDependencyFields = []struct {
 	{"Built-Using", func(p *Package, d Dependencies) { p.BuiltUsing = d }},
 }
 
-// ParsePackages 流式解析 Packages 索引，每解析出一个软件包就调用一次 fn。
+// ParsePackages streams over the Packages index, calling fn once per parsed package.
 //
-// fn 返回的错误会中止解析并原样返回，便于在遍历过程中提前退出。
-// 由于是流式解析，即使仓库有几十万个包，内存占用也保持不变。
+// An error returned by fn stops parsing and is returned unchanged, which makes it easy to exit the
+// iteration early. Because parsing is streaming, memory usage stays constant even for repositories
+// with hundreds of thousands of packages.
 func ParsePackages(r io.Reader, fn func(*Package) error) error {
 	if fn == nil {
 		return nil
@@ -134,12 +142,12 @@ func ParsePackages(r io.Reader, fn func(*Package) error) error {
 	})
 }
 
-// ParsePackageStanza 把 Packages 索引中的一个段落解析为 Package。
+// ParsePackageStanza parses one paragraph of the Packages index into a Package.
 func ParsePackageStanza(stanza *Stanza) (*Package, error) {
 	pkg := &Package{}
 	pkg.Name = stanza.Get("Package")
 	if pkg.Name == "" {
-		return nil, fmt.Errorf("%w: 缺少 Package 字段", ErrInvalidPackage)
+		return nil, fmt.Errorf("%w: missing the Package field", ErrInvalidPackage)
 	}
 	pkg.Source, pkg.SourceVersion = parseSourceField(stanza.Get("Source"))
 	if pkg.Source == "" {
@@ -172,10 +180,10 @@ func ParsePackageStanza(stanza *Stanza) (*Package, error) {
 	}
 	var err error
 	if pkg.Size.File, err = parseOptionalInt(stanza.Get("Size")); err != nil {
-		return nil, fmt.Errorf("%w: %s 的 Size 字段非法: %w", ErrInvalidPackage, pkg.Name, err)
+		return nil, fmt.Errorf("%w: invalid Size field of %s: %w", ErrInvalidPackage, pkg.Name, err)
 	}
 	if pkg.Size.Installed, err = parseOptionalInt(stanza.Get("Installed-Size")); err != nil {
-		return nil, fmt.Errorf("%w: %s 的 Installed-Size 字段非法: %w", ErrInvalidPackage, pkg.Name, err)
+		return nil, fmt.Errorf("%w: invalid Installed-Size field of %s: %w", ErrInvalidPackage, pkg.Name, err)
 	}
 
 	for _, item := range packageDependencyFields {
@@ -185,7 +193,7 @@ func ParsePackageStanza(stanza *Stanza) (*Package, error) {
 		}
 		deps, err := ParseDependencies(value)
 		if err != nil {
-			return nil, fmt.Errorf("%w: %s 的 %s 字段: %w", ErrInvalidPackage, pkg.Name, item.field, err)
+			return nil, fmt.Errorf("%w: %s field of %s: %w", ErrInvalidPackage, item.field, pkg.Name, err)
 		}
 		item.set(pkg, deps)
 	}
@@ -197,7 +205,7 @@ func ParsePackageStanza(stanza *Stanza) (*Package, error) {
 	return pkg, nil
 }
 
-// parseSourceField 解析 "Source" 字段：可能只是名字，也可能带 "(version)"。
+// parseSourceField parses the "Source" field: it may be just a name or may carry "(version)".
 func parseSourceField(raw string) (name, version string) {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
@@ -213,8 +221,8 @@ func parseSourceField(raw string) (name, version string) {
 	return raw, ""
 }
 
-// parseDescription 拆分 Debian 的多行描述：首行是摘要，其余行是长描述；
-// 只包含 "." 的行表示空行。
+// parseDescription splits a Debian multi-line description: the first line is the summary and the
+// remaining lines are the long description; a line containing only "." means a blank line.
 func parseDescription(raw string) Description {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
@@ -231,7 +239,7 @@ func parseDescription(raw string) Description {
 		}
 		long = append(long, line)
 	}
-	// 去掉长描述首尾的空行。
+	// Trim leading and trailing blank lines from the long description.
 	for len(long) > 0 && strings.TrimSpace(long[0]) == "" {
 		long = long[1:]
 	}
@@ -242,7 +250,7 @@ func parseDescription(raw string) Description {
 	return desc
 }
 
-// parseOptionalInt 解析可选的整数字段，空字符串返回 0。
+// parseOptionalInt parses an optional integer field; an empty string returns 0.
 func parseOptionalInt(raw string) (int64, error) {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
@@ -260,7 +268,8 @@ func firstNonEmpty(values ...string) string {
 	return ""
 }
 
-// SourceName 返回源码包名称（Source 字段缺省时就是包名）。
+// SourceName returns the source package name (which is the package name when the Source field is
+// absent).
 func (p *Package) SourceName() string {
 	if p.Source != "" {
 		return p.Source
@@ -268,13 +277,14 @@ func (p *Package) SourceName() string {
 	return p.Name
 }
 
-// IsArchitectureIndependent 判断是否为架构无关包（Architecture: all）。
+// IsArchitectureIndependent reports whether the package is architecture-independent
+// (Architecture: all).
 func (p *Package) IsArchitectureIndependent() bool { return p.Architecture == "all" }
 
-// Checksum 返回最强可用的指纹（sha512 > sha256 > sha1 > md5）。
+// Checksum returns the strongest available checksum (sha512 > sha256 > sha1 > md5).
 func (p *Package) Checksum() (Checksum, bool) { return p.Checksums.Strongest() }
 
-// BaseFilename 返回包文件名（Filename 的最后一段）。
+// BaseFilename returns the package file name (the last segment of Filename).
 func (p *Package) BaseFilename() string {
 	if idx := strings.LastIndexByte(p.Filename, '/'); idx >= 0 {
 		return p.Filename[idx+1:]
@@ -282,7 +292,7 @@ func (p *Package) BaseFilename() string {
 	return p.Filename
 }
 
-// ID 返回形如 "nginx_1.22.1-9_amd64" 的标识。
+// ID returns an identifier of the form "nginx_1.22.1-9_amd64".
 func (p *Package) ID() string {
 	parts := []string{p.Name}
 	if !p.Version.IsZero() {
@@ -294,20 +304,21 @@ func (p *Package) ID() string {
 	return strings.Join(parts, "_")
 }
 
-// String 返回包的标识（与 ID 相同）。
+// String returns the package identifier (the same as ID).
 func (p *Package) String() string { return p.ID() }
 
-// Field 返回索引中的原始字段值，字段名不区分大小写。
+// Field returns the raw field value from the index; the field name is case-insensitive.
 func (p *Package) Field(name string) string { return p.Fields[strings.ToLower(name)] }
 
-// HasField 判断索引中是否存在指定字段。
+// HasField reports whether the given field exists in the index.
 func (p *Package) HasField(name string) bool {
 	_, ok := p.Fields[strings.ToLower(name)]
 	return ok
 }
 
-// ProvidesPackage 判断该包是否提供指定虚拟包（Provides 字段）。
+// ProvidesPackage reports whether the package provides the given virtual package (Provides field).
 func (p *Package) ProvidesPackage(name string) bool { return p.Provides.Has(name) }
 
-// DependsOn 判断该包是否直接依赖指定包（Depends 字段，含替代方案）。
+// DependsOn reports whether the package directly depends on the given package (Depends field,
+// including alternatives).
 func (p *Package) DependsOn(name string) bool { return p.Depends.Has(name) }

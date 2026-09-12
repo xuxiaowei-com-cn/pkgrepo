@@ -7,16 +7,18 @@ import (
 	"time"
 )
 
-// containerdPackage 是测试使用的软件名称。
+// containerdPackage is the software name used by the tests.
 //
-// Docker 官方源为 el7/el8/el9/el10 都提供了 containerd.io，
-// 适合用来验证"仓库地址 + 软件名称 → 软件包列表"在不同版本 CentOS 上的表现。
+// The official Docker repositories provide containerd.io for el7/el8/el9/el10, which makes it a good
+// probe for "repository address + software name -> package list" across CentOS versions.
 const containerdPackage = "containerd.io"
 
-// TestContainerd 在 CentOS 7/8/9/10 四个版本的 Docker 官方源上查询 containerd.io：
-// 既验证"仓库地址 + 软件名称 → 软件包列表"这条主链路，也验证复用同一份元数据的查询方式。
+// TestContainerd queries containerd.io on the official Docker repositories for CentOS 7/8/9/10: it
+// verifies both the main "repository address + software name -> package list" path and the query
+// style that reuses a single copy of the metadata.
 //
-// 国内或网络受限时，可以用环境变量指向同一份仓库数据的镜像：
+// In China or behind a restricted network, an environment variable can point at a mirror serving the
+// same repository data:
 //
 //	PKGREPO_DOCKER_BASE=https://mirrors.aliyun.com/docker-ce go test ./rpmrepo -run TestContainerd -v
 func TestContainerd(t *testing.T) {
@@ -24,49 +26,51 @@ func TestContainerd(t *testing.T) {
 
 	for _, repo := range realRepos() {
 		t.Run(repo.name, func(t *testing.T) {
-			// 1. 按名称列出全部软件包（名称支持 * ? [abc] 通配符）
+			// 1. List every package by name (the name supports the * ? [abc] wildcards).
 			pkgs := containerdPackages(t, ctx, repo)
 			if len(pkgs) == 0 {
-				t.Fatalf("%s 仓库中找不到 %s", repo.name, containerdPackage)
+				t.Fatalf("%s was not found in the %s repository", containerdPackage, repo.name)
 			}
 			for i := range pkgs {
 				pkg := &pkgs[i]
 				t.Logf("%s\t%d\t%s", pkg.NEVRA(), pkg.Size.Package, pkg.DownloadURL)
 				if pkg.Name != containerdPackage {
-					t.Fatalf("查询结果混入了其他包: %s", pkg.NEVRA())
+					t.Fatalf("the query result contains another package: %s", pkg.NEVRA())
 				}
 			}
 
-			// 2. 打开仓库后复用同一份元数据：只取最新版本
+			// 2. Open the repository and reuse the same metadata: take only the newest version.
 			repository := containerdRepository(t, ctx, repo)
 			latest := findLatestContainerd(t, ctx, repository)
-			t.Logf("最新版本: %s %s", latest.NEVRA(), latest.Checksum)
+			t.Logf("newest version: %s %s", latest.NEVRA(), latest.Checksum)
 			assertContainerdPackage(t, repo, latest)
 
-			// 3. 复用同一份元数据做更精细的查询：限定架构，按版本降序取最新
+			// 3. Reuse the same metadata for a finer query: restrict the architecture and take
+			// the newest by descending version.
 			x86 := findContainerd(t, ctx, repository, Query{
 				Name: containerdPackage,
 				Arch: "x86_64",
 			})
-			t.Logf("x86_64 最新包: %s", x86[0].DownloadURL)
+			t.Logf("newest x86_64 package: %s", x86[0].DownloadURL)
 			if x86[0].NEVRA() != latest.NEVRA() {
-				t.Errorf("按架构查询的最新包为 %s，与 Latest 查询的 %s 不一致", x86[0].NEVRA(), latest.NEVRA())
+				t.Errorf("the newest package from the architecture query is %s, which differs from %s from the Latest query", x86[0].NEVRA(), latest.NEVRA())
 			}
 			for i := range x86 {
 				if x86[i].Version.Compare(latest.Version) > 0 {
-					t.Errorf("排序结果有误：%s 比 %s 更新", x86[i].NEVRA(), latest.NEVRA())
+					t.Errorf("wrong sort result: %s is newer than %s", x86[i].NEVRA(), latest.NEVRA())
 				}
 			}
 
-			// 4. 不带版本条件时，列表里也应能找到最新版本
+			// 4. Without a version condition, the newest version should still appear in the
+			// list.
 			if !containsPackage(pkgs, latest.NEVRA()) {
-				t.Errorf("列表查询中没有 %s", latest.NEVRA())
+				t.Errorf("the list query does not contain %s", latest.NEVRA())
 			}
 		})
 	}
 }
 
-// containerdPackages 按名称列出仓库中的全部 containerd.io 包。
+// containerdPackages lists every containerd.io package in the repository by name.
 func containerdPackages(t *testing.T, ctx context.Context, repo realRepo) []Package {
 	t.Helper()
 	requireNetwork(t, repo.url)
@@ -75,12 +79,12 @@ func containerdPackages(t *testing.T, ctx context.Context, repo realRepo) []Pack
 	})
 	if err != nil {
 		skipIfNetworkUnavailable(t, repo.url, err)
-		t.Fatalf("查询 %s 的 %s 失败: %v", repo.name, containerdPackage, err)
+		t.Fatalf("querying %s in %s failed: %v", containerdPackage, repo.name, err)
 	}
 	return pkgs
 }
 
-// containerdRepository 打开仓库，后续多个查询复用同一份元数据。
+// containerdRepository opens the repository so that later queries reuse the same metadata.
 func containerdRepository(t *testing.T, ctx context.Context, repo realRepo) *Repository {
 	t.Helper()
 	requireNetwork(t, repo.url)
@@ -89,25 +93,25 @@ func containerdRepository(t *testing.T, ctx context.Context, repo realRepo) *Rep
 	})
 	if err != nil {
 		skipIfNetworkUnavailable(t, repo.url, err)
-		t.Fatalf("打开 %s 仓库失败: %v", repo.name, err)
+		t.Fatalf("opening the %s repository failed: %v", repo.name, err)
 	}
 	return repository
 }
 
-// findContainerd 在已打开的仓库上查询，结果为空时直接失败。
+// findContainerd queries an already opened repository and fails immediately when there is no result.
 func findContainerd(t *testing.T, ctx context.Context, repository *Repository, q Query) []Package {
 	t.Helper()
 	pkgs, err := repository.FindPackages(ctx, q)
 	if err != nil {
-		t.Fatalf("查询 %+v 失败: %v", q, err)
+		t.Fatalf("query %+v failed: %v", q, err)
 	}
 	if len(pkgs) == 0 {
-		t.Fatalf("查询 %+v 没有结果", q)
+		t.Fatalf("query %+v returned no result", q)
 	}
 	return pkgs
 }
 
-// findLatestContainerd 返回仓库中版本最新的 containerd.io 包。
+// findLatestContainerd returns the newest containerd.io package in the repository.
 func findLatestContainerd(t *testing.T, ctx context.Context, repository *Repository) *Package {
 	t.Helper()
 	pkg, err := repository.FindPackage(ctx, Query{
@@ -116,47 +120,48 @@ func findLatestContainerd(t *testing.T, ctx context.Context, repository *Reposit
 		Latest: true,
 	})
 	if err != nil {
-		t.Fatalf("查询 %s 的最新版本失败: %v", repository.URL, err)
+		t.Fatalf("querying the newest version in %s failed: %v", repository.URL, err)
 	}
 	return pkg
 }
 
-// assertContainerdPackage 校验真实仓库返回的包信息是否自洽。
+// assertContainerdPackage checks that the package information returned by a real repository is
+// self-consistent.
 func assertContainerdPackage(t *testing.T, repo realRepo, pkg *Package) {
 	t.Helper()
 	distro := strings.TrimPrefix(repo.name, "centos")
 
 	if pkg.Name != containerdPackage || pkg.Arch != "x86_64" {
-		t.Fatalf("查询结果混入了其他包: %s", pkg.NEVRA())
+		t.Fatalf("the query result contains another package: %s", pkg.NEVRA())
 	}
 	if pkg.Checksum.Type != "sha256" || pkg.Checksum.Value == "" {
-		t.Fatalf("包 %s 的指纹异常: %+v", pkg.NEVRA(), pkg.Checksum)
+		t.Fatalf("unexpected checksum for package %s: %+v", pkg.NEVRA(), pkg.Checksum)
 	}
 	if pkg.Size.Package <= 0 || pkg.Size.Installed <= 0 {
-		t.Fatalf("包 %s 的大小异常: %+v", pkg.NEVRA(), pkg.Size)
+		t.Fatalf("unexpected size for package %s: %+v", pkg.NEVRA(), pkg.Size)
 	}
 	if !strings.Contains(pkg.DownloadURL, "/centos/"+distro+"/") {
-		t.Errorf("包 %s 的下载地址不属于 CentOS %s: %q", pkg.NEVRA(), distro, pkg.DownloadURL)
+		t.Errorf("the download address of package %s does not belong to CentOS %s: %q", pkg.NEVRA(), distro, pkg.DownloadURL)
 	}
 	if !strings.HasSuffix(pkg.DownloadURL, pkg.Filename()) {
-		t.Errorf("包 %s 的下载地址异常: %q", pkg.NEVRA(), pkg.DownloadURL)
+		t.Errorf("unexpected download address of package %s: %q", pkg.NEVRA(), pkg.DownloadURL)
 	}
 	if want := pkg.Name + "-" + pkg.Version.String() + "." + pkg.Arch; pkg.NEVRA() != want {
-		t.Errorf("NEVRA 为 %q，期望 %q", pkg.NEVRA(), want)
+		t.Errorf("NEVRA is %q, want %q", pkg.NEVRA(), want)
 	}
 	if len(pkg.Format.Requires) == 0 {
-		t.Errorf("包 %s 没有解析出任何依赖", pkg.NEVRA())
+		t.Errorf("no dependency was parsed for package %s", pkg.NEVRA())
 	}
-	// 版本号里应带上发行版标记（el7、el8、el9、el10）。
+	// The version should carry the distribution tag (el7, el8, el9, el10).
 	if !strings.HasSuffix(pkg.Version.Release, repo.distTag) {
-		t.Errorf("包 %s 的 release 不含 %s", pkg.NEVRA(), repo.distTag)
+		t.Errorf("the release of package %s does not contain %s", pkg.NEVRA(), repo.distTag)
 	}
 	if pkg.Time.Build.IsZero() || pkg.Time.File.IsZero() {
-		t.Errorf("包 %s 缺少构建/入库时间", pkg.NEVRA())
+		t.Errorf("package %s is missing its build/add time", pkg.NEVRA())
 	}
 }
 
-// containsPackage 判断列表中是否存在指定 NEVRA 的包。
+// containsPackage reports whether the list contains a package with the given NEVRA.
 func containsPackage(pkgs []Package, nevra string) bool {
 	for i := range pkgs {
 		if pkgs[i].NEVRA() == nevra {

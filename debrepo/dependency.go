@@ -7,27 +7,32 @@ import (
 	"strings"
 )
 
-// Constraint 是依赖关系中的一个具体约束，例如 "libc6 (>= 2.34)"、"python3:any"。
+// Constraint is a single constraint inside a dependency relation, for example "libc6 (>= 2.34)" or
+// "python3:any".
 type Constraint struct {
-	// Name 是包名（也可能是虚拟包名，如 "mail-transport-agent"）。
+	// Name is the package name (it can also be a virtual package name such as
+	// "mail-transport-agent").
 	Name string `json:"name"`
-	// Arch 是依赖的架构限定，取值 "any"、"native" 或具体架构（如 "amd64"），
-	// 来自 "python3:any" 这样的写法，为空表示未限定。
+	// Arch is the architecture qualifier of the dependency, one of "any", "native", or a specific
+	// architecture (such as "amd64"). It comes from a spelling like "python3:any"; empty means no
+	// qualifier.
 	Arch string `json:"arch,omitempty"`
-	// Operator 是版本关系：=、>=、<=、>>、<<、>、<，为空表示不限制版本。
+	// Operator is the version relation: =, >=, <=, >>, <<, >, or <; empty means no version
+	// restriction.
 	Operator string `json:"operator,omitempty"`
-	// Version 是版本约束，仅在 Operator 非空时出现。
+	// Version is the version constraint; it only appears when Operator is non-empty.
 	Version string `json:"version,omitempty"`
-	// Archs 是架构限制列表（[amd64 !i386]），保留原始写法（含 "!" 前缀）。
+	// Archs is the architecture restriction list ([amd64 !i386]), kept as written (including the "!"
+	// prefix).
 	Archs []string `json:"archs,omitempty"`
-	// Profiles 是构建 profile 限制（<!nocheck>），保留原始写法。
+	// Profiles is the build profile restriction (<!nocheck>), kept as written.
 	Profiles []string `json:"profiles,omitempty"`
 }
 
-// IsVersioned 判断约束是否带版本限制。
+// IsVersioned reports whether the constraint carries a version restriction.
 func (c Constraint) IsVersioned() bool { return c.Operator != "" }
 
-// String 返回可读的约束描述，例如 "libc6 (>= 2.34)"。
+// String returns a human-readable constraint description, for example "libc6 (>= 2.34)".
 func (c Constraint) String() string {
 	var sb strings.Builder
 	sb.WriteString(c.Name)
@@ -55,14 +60,14 @@ func (c Constraint) String() string {
 	return sb.String()
 }
 
-// Dependency 是一条依赖关系，可能包含多个用 "|" 分隔的替代方案，
-// 例如 "libc6 (>= 2.34) | libc6.1"。
+// Dependency is a single dependency relation, which may contain several alternatives separated by
+// "|", for example "libc6 (>= 2.34) | libc6.1".
 type Dependency struct {
-	// Alternatives 是替代方案（至少一个）。
+	// Alternatives are the alternatives (at least one).
 	Alternatives []Constraint `json:"alternatives"`
 }
 
-// Names 返回该依赖涉及的所有（替代）包名。
+// Names returns every (alternative) package name involved in the dependency.
 func (d Dependency) Names() []string {
 	names := make([]string, 0, len(d.Alternatives))
 	for _, alt := range d.Alternatives {
@@ -71,7 +76,8 @@ func (d Dependency) Names() []string {
 	return names
 }
 
-// Matches 判断依赖关系中是否出现指定包名（不比较版本约束）。
+// Matches reports whether the given package name appears in the dependency relation (version
+// constraints are not compared).
 func (d Dependency) Matches(name string) bool {
 	for _, alt := range d.Alternatives {
 		if alt.Name == name {
@@ -81,7 +87,8 @@ func (d Dependency) Matches(name string) bool {
 	return false
 }
 
-// String 返回依赖关系的文本形式，例如 "libc6 (>= 2.34) | libc6.1"。
+// String returns the textual form of the dependency relation, for example
+// "libc6 (>= 2.34) | libc6.1".
 func (d Dependency) String() string {
 	parts := make([]string, 0, len(d.Alternatives))
 	for _, alt := range d.Alternatives {
@@ -90,10 +97,10 @@ func (d Dependency) String() string {
 	return strings.Join(parts, " | ")
 }
 
-// MarshalJSON 输出为字符串。
+// MarshalJSON renders the dependency as a string.
 func (d Dependency) MarshalJSON() ([]byte, error) { return marshalNoEscape(d.String()) }
 
-// UnmarshalJSON 解析字符串形式的依赖关系。
+// UnmarshalJSON parses a dependency relation in string form.
 func (d *Dependency) UnmarshalJSON(data []byte) error {
 	var raw string
 	if err := json.Unmarshal(data, &raw); err != nil {
@@ -107,10 +114,12 @@ func (d *Dependency) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// Dependencies 是一个依赖字段（如 Depends）的完整内容：多条依赖之间用 "," 分隔。
+// Dependencies is the complete content of a dependency field (such as Depends): several dependencies
+// separated by ",".
 type Dependencies []Dependency
 
-// Has 判断依赖列表中是否包含指定包名（忽略版本约束与替代方案）。
+// Has reports whether the dependency list contains the given package name (version constraints and
+// alternatives are ignored).
 func (d Dependencies) Has(name string) bool {
 	for _, dep := range d {
 		if dep.Matches(name) {
@@ -120,7 +129,7 @@ func (d Dependencies) Has(name string) bool {
 	return false
 }
 
-// Find 返回第一条涉及指定包名的依赖关系。
+// Find returns the first dependency relation that involves the given package name.
 func (d Dependencies) Find(name string) (Dependency, bool) {
 	for _, dep := range d {
 		if dep.Matches(name) {
@@ -130,7 +139,8 @@ func (d Dependencies) Find(name string) (Dependency, bool) {
 	return Dependency{}, false
 }
 
-// Names 返回依赖列表中出现过的所有包名（含替代方案，按出现顺序）。
+// Names returns every package name that appears in the dependency list (including alternatives, in
+// order of appearance).
 func (d Dependencies) Names() []string {
 	var names []string
 	for _, dep := range d {
@@ -139,7 +149,7 @@ func (d Dependencies) Names() []string {
 	return names
 }
 
-// String 返回依赖列表的文本形式，例如 "libc6 (>= 2.34), libssl3"。
+// String returns the textual form of the dependency list, for example "libc6 (>= 2.34), libssl3".
 func (d Dependencies) String() string {
 	parts := make([]string, 0, len(d))
 	for _, dep := range d {
@@ -148,7 +158,7 @@ func (d Dependencies) String() string {
 	return strings.Join(parts, ", ")
 }
 
-// MarshalJSON 输出为字符串数组，每项是一条依赖关系。
+// MarshalJSON renders the list as an array of strings, one per dependency relation.
 func (d Dependencies) MarshalJSON() ([]byte, error) {
 	if d == nil {
 		return []byte("null"), nil
@@ -160,8 +170,8 @@ func (d Dependencies) MarshalJSON() ([]byte, error) {
 	return marshalNoEscape(items)
 }
 
-// marshalNoEscape 序列化时不转义 "<" ">" "&"，
-// 避免依赖里的 ">=" 被写成 "\u003e="（外层编码器仍可自行决定是否转义）。
+// marshalNoEscape does not escape "<", ">", or "&" during serialization, which keeps a ">=" inside a
+// dependency from being written as "\u003e=" (an outer encoder can still decide to escape them).
 func marshalNoEscape(value any) ([]byte, error) {
 	var buffer bytes.Buffer
 	encoder := json.NewEncoder(&buffer)
@@ -172,7 +182,7 @@ func marshalNoEscape(value any) ([]byte, error) {
 	return bytes.TrimRight(buffer.Bytes(), "\n"), nil
 }
 
-// UnmarshalJSON 解析字符串数组或整段依赖文本。
+// UnmarshalJSON parses either an array of strings or a whole block of dependency text.
 func (d *Dependencies) UnmarshalJSON(data []byte) error {
 	var items []string
 	if err := json.Unmarshal(data, &items); err == nil {
@@ -199,14 +209,15 @@ func (d *Dependencies) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// ParseDependencies 解析一个完整的依赖字段（如 "libc6 (>= 2.34), libssl3 | libssl1.1"）。
-// 空字段返回 nil。
+// ParseDependencies parses a complete dependency field (such as
+// "libc6 (>= 2.34), libssl3 | libssl1.1"). An empty field returns nil.
 func ParseDependencies(field string) (Dependencies, error) {
 	field = strings.TrimSpace(field)
 	if field == "" {
 		return nil, nil
 	}
-	// 多行字段（如 Uploaders、Build-Depends）用 "\n" 连接，先合并为一行。
+	// Multi-line fields (such as Uploaders and Build-Depends) are joined with "\n"; merge them into a
+	// single line first.
 	field = strings.ReplaceAll(field, "\n", " ")
 	var deps Dependencies
 	for _, part := range splitTopLevel(field, ',') {
@@ -223,11 +234,11 @@ func ParseDependencies(field string) (Dependencies, error) {
 	return deps, nil
 }
 
-// ParseDependency 解析一条依赖关系（可用 "|" 分隔多个替代方案）。
+// ParseDependency parses a single dependency relation ("|" can separate several alternatives).
 func ParseDependency(raw string) (Dependency, error) {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
-		return Dependency{}, fmt.Errorf("%w: 依赖关系为空", ErrInvalidRelation)
+		return Dependency{}, fmt.Errorf("%w: empty dependency relation", ErrInvalidRelation)
 	}
 	var dep Dependency
 	for _, part := range splitTopLevel(raw, '|') {
@@ -243,20 +254,21 @@ func ParseDependency(raw string) (Dependency, error) {
 	return dep, nil
 }
 
-// parseConstraint 解析单个约束："name[:arch] [(op version)] [[archs]] [<profiles>]"。
+// parseConstraint parses a single constraint: "name[:arch] [(op version)] [[archs]] [<profiles>]".
 func parseConstraint(raw string) (Constraint, error) {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
-		return Constraint{}, fmt.Errorf("%w: 空的依赖项", ErrInvalidRelation)
+		return Constraint{}, fmt.Errorf("%w: empty dependency item", ErrInvalidRelation)
 	}
 	var c Constraint
 	rest := raw
 
-	// 先摘出版本约束，避免其中的 "<" ">" 与架构/profile 限制混淆。
+	// Extract the version constraint first, so that its "<" and ">" are not confused with the
+	// architecture and profile restrictions.
 	if open := strings.IndexByte(rest, '('); open >= 0 {
 		closeIdx := strings.IndexByte(rest[open:], ')')
 		if closeIdx < 0 {
-			return Constraint{}, fmt.Errorf("%w: %q 中的版本约束缺少 ')'", ErrInvalidRelation, raw)
+			return Constraint{}, fmt.Errorf("%w: the version constraint in %q is missing ')'", ErrInvalidRelation, raw)
 		}
 		versionPart := strings.TrimSpace(rest[open+1 : open+closeIdx])
 		operator, version, err := parseVersionRelation(versionPart)
@@ -267,7 +279,7 @@ func parseConstraint(raw string) (Constraint, error) {
 		rest = rest[:open] + rest[open+closeIdx+1:]
 	}
 
-	// 架构限制 [amd64 !i386]
+	// Architecture restriction [amd64 !i386]
 	for {
 		open := strings.IndexByte(rest, '[')
 		if open < 0 {
@@ -275,13 +287,13 @@ func parseConstraint(raw string) (Constraint, error) {
 		}
 		closeIdx := strings.IndexByte(rest[open:], ']')
 		if closeIdx < 0 {
-			return Constraint{}, fmt.Errorf("%w: %q 中的架构限制缺少 ']'", ErrInvalidRelation, raw)
+			return Constraint{}, fmt.Errorf("%w: the architecture restriction in %q is missing ']'", ErrInvalidRelation, raw)
 		}
 		c.Archs = append(c.Archs, strings.Fields(rest[open+1:open+closeIdx])...)
 		rest = rest[:open] + rest[open+closeIdx+1:]
 	}
 
-	// 构建 profile 限制 <!nocheck>
+	// Build profile restriction <!nocheck>
 	for {
 		open := strings.IndexByte(rest, '<')
 		if open < 0 {
@@ -289,7 +301,7 @@ func parseConstraint(raw string) (Constraint, error) {
 		}
 		closeIdx := strings.IndexByte(rest[open:], '>')
 		if closeIdx < 0 {
-			return Constraint{}, fmt.Errorf("%w: %q 中的 profile 限制缺少 '>'", ErrInvalidRelation, raw)
+			return Constraint{}, fmt.Errorf("%w: the profile restriction in %q is missing '>'", ErrInvalidRelation, raw)
 		}
 		c.Profiles = append(c.Profiles, strings.Fields(rest[open+1:open+closeIdx])...)
 		rest = rest[:open] + rest[open+closeIdx+1:]
@@ -297,27 +309,27 @@ func parseConstraint(raw string) (Constraint, error) {
 
 	name := strings.TrimSpace(rest)
 	if name == "" {
-		return Constraint{}, fmt.Errorf("%w: %q 缺少包名", ErrInvalidRelation, raw)
+		return Constraint{}, fmt.Errorf("%w: %q is missing a package name", ErrInvalidRelation, raw)
 	}
 	if colon := strings.IndexByte(name, ':'); colon >= 0 {
 		c.Arch = strings.TrimSpace(name[colon+1:])
 		name = strings.TrimSpace(name[:colon])
 		if c.Arch == "" {
-			return Constraint{}, fmt.Errorf("%w: %q 的架构限定为空", ErrInvalidRelation, raw)
+			return Constraint{}, fmt.Errorf("%w: the architecture qualifier of %q is empty", ErrInvalidRelation, raw)
 		}
 	}
 	if name == "" {
-		return Constraint{}, fmt.Errorf("%w: %q 缺少包名", ErrInvalidRelation, raw)
+		return Constraint{}, fmt.Errorf("%w: %q is missing a package name", ErrInvalidRelation, raw)
 	}
 	c.Name = name
 	if !validPackageName(name) {
-		return Constraint{}, fmt.Errorf("%w: %q 中的包名 %q 非法", ErrInvalidRelation, raw, name)
+		return Constraint{}, fmt.Errorf("%w: invalid package name %q in %q", ErrInvalidRelation, name, raw)
 	}
 	return c, nil
 }
 
-// validPackageName 判断是否符合 Debian 的包名规则：
-// 由字母、数字、'+'、'-'、'.' 组成，且以字母或数字开头。
+// validPackageName reports whether the name follows the Debian package name rules: it consists of
+// letters, digits, '+', '-', and '.', and starts with a letter or a digit.
 func validPackageName(name string) bool {
 	for i := 0; i < len(name); i++ {
 		c := name[i]
@@ -336,25 +348,27 @@ func validPackageName(name string) bool {
 	return name != ""
 }
 
-// parseVersionRelation 解析 "(>= 1.0)" 中的 ">= 1.0"。
+// parseVersionRelation parses the ">= 1.0" inside "(>= 1.0)".
 func parseVersionRelation(raw string) (operator, version string, err error) {
 	raw = strings.TrimSpace(raw)
 	for _, op := range []string{"<<", "<=", ">=", ">>", "=", "<", ">"} {
 		if strings.HasPrefix(raw, op) {
 			version = strings.TrimSpace(raw[len(op):])
 			if version == "" {
-				return "", "", fmt.Errorf("版本约束 %q 缺少版本号", raw)
+				return "", "", fmt.Errorf("version constraint %q is missing a version number", raw)
 			}
 			return op, version, nil
 		}
 	}
-	return "", "", fmt.Errorf("版本约束 %q 缺少关系运算符（=、>=、<=、>>、<<）", raw)
+	return "", "", fmt.Errorf("version constraint %q is missing a relation operator (=, >=, <=, >>, <<)", raw)
 }
 
-// splitTopLevel 按分隔符切分，但忽略括号与方括号内部的分隔符。
+// splitTopLevel splits on a separator while ignoring separators inside parentheses and square
+// brackets.
 //
-// 注意：这里不能把 "<" ">" 当作层级符号，因为版本约束里会写作
-// "(<< 1.0)"、"(>= 2.0)"，其中的 "<" ">" 会被误判为 profile 限制的开始。
+// Note that "<" and ">" must not be treated as nesting characters here, because a version constraint
+// is written as "(<< 1.0)" or "(>= 2.0)" and its "<" and ">" would be mistaken for the start of a
+// profile restriction.
 func splitTopLevel(s string, sep byte) []string {
 	var parts []string
 	depth := 0

@@ -6,9 +6,9 @@ import (
 	"strings"
 )
 
-// charsetReader 支持 XML 声明中的常见字符集：
-// UTF-8 / US-ASCII 直接透传，ISO-8859-1（Latin-1）转换为 UTF-8。
-// 仓库元数据绝大多数是 UTF-8，这里主要是为了兼容老仓库。
+// charsetReader supports the common charsets found in XML declarations:
+// UTF-8 / US-ASCII are passed through, and ISO-8859-1 (Latin-1) is converted to UTF-8.
+// Almost all repository metadata is UTF-8; this mainly exists to support old repositories.
 func charsetReader(charset string, input io.Reader) (io.Reader, error) {
 	switch strings.ToLower(strings.TrimSpace(charset)) {
 	case "", "utf-8", "utf8", "us-ascii", "ascii":
@@ -16,11 +16,11 @@ func charsetReader(charset string, input io.Reader) (io.Reader, error) {
 	case "iso-8859-1", "iso8859-1", "latin1", "latin-1":
 		return &latin1Reader{src: input}, nil
 	default:
-		return nil, fmt.Errorf("rpmrepo: 不支持的 XML 字符集 %q", charset)
+		return nil, fmt.Errorf("rpmrepo: unsupported XML charset %q", charset)
 	}
 }
 
-// latin1Reader 把 Latin-1 字节流转换为 UTF-8。
+// latin1Reader converts a Latin-1 byte stream to UTF-8.
 type latin1Reader struct {
 	src     io.Reader
 	pending []byte

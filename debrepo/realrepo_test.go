@@ -18,9 +18,10 @@ import (
 	"time"
 )
 
-// dockerRepoBase 返回 Docker 的 deb 软件源地址。
+// dockerRepoBase returns the address of Docker's deb repository.
 //
-// 地址可以用环境变量覆盖，国内本地开发可以指向镜像站：
+// The address can be overridden with an environment variable; local development in China can point it
+// at a mirror:
 //
 //	PKGREPO_DOCKER_BASE=https://mirrors.aliyun.com/docker-ce go test ./...
 func dockerRepoBase() string {
@@ -30,12 +31,12 @@ func dockerRepoBase() string {
 	return "https://download.docker.com"
 }
 
-// realRepo 描述一个用于端到端验证的真实 deb 仓库。
+// realRepo describes a real deb repository used for end-to-end verification.
 type realRepo struct {
 	name string
-	// distro 是发行版目录名（debian、ubuntu）。
+	// distro is the distribution directory name (debian, ubuntu).
 	distro string
-	// url 是发行版根地址，例如 https://download.docker.com/linux/debian。
+	// url is the distribution root address, for example https://download.docker.com/linux/debian.
 	url         string
 	suite       string
 	component   string
@@ -44,8 +45,9 @@ type realRepo struct {
 	minPackages int
 }
 
-// realRepos 返回用于端到端验证的真实仓库：Docker 官方的 Debian 与 Ubuntu 源。
-// 这些仓库覆盖 Debian 与 Ubuntu 两种发行版、四种 suite，并且都使用 5: 纪元版本号。
+// realRepos returns the real repositories used for end-to-end verification: the official Docker
+// Debian and Ubuntu repositories. They cover both the Debian and Ubuntu distributions and four
+// suites, and all of them use the 5: epoch.
 func realRepos() []realRepo {
 	base := dockerRepoBase()
 	repo := func(name, distro, suite, distTag string) realRepo {
@@ -70,14 +72,16 @@ func realRepos() []realRepo {
 	}
 }
 
-// realRepoPackage 是端到端测试使用的软件名称。
+// realRepoPackage is the software name used by the end-to-end tests.
 const realRepoPackage = "docker-ce"
 
-// networkUnavailable 记录本次测试运行是否已确认连不上外网，
-// 避免离线环境下每个子测试都反复等待 DNS 超时。
+// networkUnavailable records whether this test run has already determined that the network is
+// unreachable, which keeps every subtest in an offline environment from waiting for DNS timeouts
+// again.
 var networkUnavailable atomic.Bool
 
-// realRepoClient 返回测试用的 HTTP 客户端（固定使用 IPv4，链路更稳定）。
+// realRepoClient returns the HTTP client used by the tests (IPv4 is used unconditionally, which makes
+// the connection more stable).
 func realRepoClient(timeout time.Duration) *http.Client {
 	dialer := &net.Dialer{Timeout: 30 * time.Second, KeepAlive: 30 * time.Second}
 	return &http.Client{
@@ -96,15 +100,17 @@ func realRepoClient(timeout time.Duration) *http.Client {
 	}
 }
 
-// requireNetwork 在本次运行已确认网络不可用时直接跳过。
+// requireNetwork skips immediately when this run has already determined that the network is
+// unavailable.
 func requireNetwork(t *testing.T, repoURL string) {
 	t.Helper()
 	if networkUnavailable.Load() {
-		t.Skipf("跳过：本次运行已确认网络不可用，无法访问 %s", repoURL)
+		t.Skipf("skipping: this run determined that the network is unavailable, cannot access %s", repoURL)
 	}
 }
 
-// isOfflineError 判断错误是否表示"当前环境连不上外网"（DNS 解析失败、网络不可达等）。
+// isOfflineError reports whether the error means "the current environment cannot reach the internet"
+// (DNS resolution failure, unreachable network, and so on).
 func isOfflineError(err error) bool {
 	var dnsErr *net.DNSError
 	if errors.As(err, &dnsErr) {
@@ -122,8 +128,9 @@ func isOfflineError(err error) bool {
 	return false
 }
 
-// callWithRetry 在网络抖动时重试（最多 6 次，逐步加大退避），返回最后一次的结果。
-// 仓库真实返回 404 之类的响应不会重试，直接返回。
+// callWithRetry retries on network flakiness (at most 6 times with growing backoff) and returns the
+// last result. A genuine response from the repository such as a 404 is not retried and is returned
+// directly.
 func callWithRetry[T any](t *testing.T, repoURL string, action func() (T, error)) (T, error) {
 	t.Helper()
 	var zero T
@@ -135,8 +142,8 @@ func callWithRetry[T any](t *testing.T, repoURL string, action func() (T, error)
 		}
 		if isOfflineError(err) {
 			networkUnavailable.Store(true)
-			t.Logf("访问 %s 连续网络失败: %v", repoURL, err)
-			t.Skipf("跳过：网络不可用，无法访问真实仓库 %s（%v）", repoURL, err)
+			t.Logf("accessing %s failed due to network errors: %v", repoURL, err)
+			t.Skipf("skipping: the network is unavailable, cannot access the real repository %s (%v)", repoURL, err)
 		}
 		var httpErr *HTTPError
 		if errors.As(err, &httpErr) {
@@ -149,8 +156,9 @@ func callWithRetry[T any](t *testing.T, repoURL string, action func() (T, error)
 	return zero, err
 }
 
-// cachingFetcher 在内存中缓存已下载的文件，避免同一份索引被反复下载。
-// 真实仓库的索引可能有几十 MB，测试中会多次扫描，缓存能把网络开销降到最低。
+// cachingFetcher caches downloaded files in memory, which keeps the same index from being downloaded
+// repeatedly. The index of a real repository can be tens of MB and the tests scan it several times,
+// so the cache minimizes network cost.
 type cachingFetcher struct {
 	base Fetcher
 
@@ -184,7 +192,8 @@ func (f *cachingFetcher) Open(ctx context.Context, rawURL string) (io.ReadCloser
 	return io.NopCloser(bytes.NewReader(data)), nil
 }
 
-// repoCache 缓存已打开的仓库，避免每个子测试重复下载同一份索引。
+// repoCache caches opened repositories, which keeps every subtest from downloading the same index
+// again.
 type repoCache struct {
 	mu      sync.Mutex
 	entries map[string]*Repository
@@ -206,7 +215,8 @@ func (c *repoCache) load(key string, open func() (*Repository, error)) (*Reposit
 	return repo, nil
 }
 
-// openRealRepo 打开真实仓库（开启校验和校验），并在本次测试运行内复用。
+// openRealRepo opens a real repository (with checksum verification enabled) and reuses it within this
+// test run.
 func openRealRepo(t *testing.T, repo realRepo) *Repository {
 	t.Helper()
 	requireNetwork(t, repo.url)
@@ -227,9 +237,9 @@ func openRealRepo(t *testing.T, repo realRepo) *Repository {
 	if err != nil {
 		if isOfflineError(err) {
 			networkUnavailable.Store(true)
-			t.Skipf("跳过：网络不可用，无法访问真实仓库 %s（%v）", repo.url, err)
+			t.Skipf("skipping: the network is unavailable, cannot access the real repository %s (%v)", repo.url, err)
 		}
-		t.Fatalf("打开真实仓库 %s 失败: %v", repo.url, err)
+		t.Fatalf("opening the real repository %s failed: %v", repo.url, err)
 	}
 	return opened
 }
@@ -241,27 +251,27 @@ func TestRealReposReleaseMetadata(t *testing.T) {
 			opened := openRealRepo(t, repo)
 			release := opened.Release
 			if release == nil {
-				t.Fatal("Release 为空")
+				t.Fatal("Release is empty")
 			}
 			if release.Origin == "" || release.Label == "" {
 				t.Errorf("Origin/Label = %q/%q", release.Origin, release.Label)
 			}
 			if release.Suite != repo.suite {
-				t.Errorf("Suite = %q，期望 %q", release.Suite, repo.suite)
+				t.Errorf("Suite = %q, want %q", release.Suite, repo.suite)
 			}
 			if release.Date.IsZero() {
-				t.Error("Date 应当被解析")
+				t.Error("Date should be parsed")
 			}
 			if !containsString(release.Components, repo.component) {
-				t.Errorf("Components = %v，期望包含 %q", release.Components, repo.component)
+				t.Errorf("Components = %v, want it to contain %q", release.Components, repo.component)
 			}
 			if !containsString(release.Architectures, repo.arch) {
-				t.Errorf("Architectures = %v，期望包含 %q", release.Architectures, repo.arch)
+				t.Errorf("Architectures = %v, want it to contain %q", release.Architectures, repo.arch)
 			}
 			if !strings.HasPrefix(opened.ReleaseURL, repo.url+"/dists/"+repo.suite+"/") {
 				t.Errorf("ReleaseURL = %q", opened.ReleaseURL)
 			}
-			t.Logf("%s: %s（InRelease: %t），Architectures=%v Components=%v",
+			t.Logf("%s: %s (InRelease: %t), Architectures=%v Components=%v",
 				repo.name, opened.ReleaseURL, opened.InRelease, release.Architectures, release.Components)
 		})
 	}
@@ -274,32 +284,32 @@ func TestRealReposIndexes(t *testing.T) {
 			opened := openRealRepo(t, repo)
 			indexes := opened.Indexes()
 			if len(indexes) == 0 {
-				t.Fatal("没有发现任何 Packages 索引")
+				t.Fatal("no Packages index was found")
 			}
 			index := indexes[0]
 			if index.Component != repo.component || index.Architecture != repo.arch {
-				t.Errorf("索引 = %+v", index)
+				t.Errorf("index = %+v", index)
 			}
 			if !index.FromRelease || !strings.Contains(index.Path, "/Packages") {
-				t.Errorf("索引路径 = %q", index.Path)
+				t.Errorf("index path = %q", index.Path)
 			}
 			if index.Size <= 0 || index.Checksum.Value == "" {
-				t.Errorf("索引缺少大小或校验值: %+v", index)
+				t.Errorf("the index is missing its size or checksum: %+v", index)
 			}
 			releasePath := strings.TrimPrefix(index.Path, "dists/"+opened.Suite+"/")
 			entry, ok := opened.Release.Lookup(releasePath)
 			if !ok {
-				t.Fatalf("Release 中找不到索引 %q", releasePath)
+				t.Fatalf("index %q was not found in the Release file", releasePath)
 			}
 			if entry.Size != index.Size || !entry.Checksum.Equal(index.Checksum) {
-				t.Errorf("Release 中的索引信息 = %+v，索引 = %+v", entry, index)
+				t.Errorf("index information in the Release file = %+v, index = %+v", entry, index)
 			}
 			switch entry.Checksum.Type {
 			case "sha512", "sha256":
 			default:
-				t.Errorf("索引校验算法 = %q", entry.Checksum.Type)
+				t.Errorf("index checksum algorithm = %q", entry.Checksum.Type)
 			}
-			t.Logf("%s: %s（%s，%d 字节，候选 %d 个）", repo.name, index.Path,
+			t.Logf("%s: %s (%s, %d bytes, %d candidates)", repo.name, index.Path,
 				CompressionOf(index.Path), index.Size, len(index.Candidates))
 		})
 	}
@@ -313,27 +323,28 @@ func TestRealReposListPackages(t *testing.T) {
 			opened := openRealRepo(t, repo)
 			pkgs, err := opened.FindPackages(ctx, Query{Name: realRepoPackage})
 			if err != nil {
-				t.Fatalf("查询 %s 失败: %v", realRepoPackage, err)
+				t.Fatalf("querying %s failed: %v", realRepoPackage, err)
 			}
 			if len(pkgs) < 5 {
-				t.Fatalf("%s 只找到 %d 个版本，期望至少 5 个", realRepoPackage, len(pkgs))
+				t.Fatalf("only %d versions of %s were found, want at least 5", len(pkgs), realRepoPackage)
 			}
-			// 默认排序：名称升序、版本降序，因此最新版本在最前。
+			// Default sort: name ascending and version descending, so the newest version comes
+			// first.
 			for i := 1; i < len(pkgs); i++ {
 				if CompareVersions(pkgs[i-1].Version.String(), pkgs[i].Version.String()) < 0 {
-					t.Errorf("版本未按降序排列: %s < %s",
+					t.Errorf("versions are not sorted in descending order: %s < %s",
 						pkgs[i-1].Version.String(), pkgs[i].Version.String())
 				}
 			}
 			latest := pkgs[0]
 			if latest.Version.Epoch != 5 {
-				t.Errorf("最新版本 %s 的 epoch = %d，期望 5", latest.Version.String(), latest.Version.Epoch)
+				t.Errorf("the epoch of the newest version %s = %d, want 5", latest.Version.String(), latest.Version.Epoch)
 			}
 			if !strings.Contains(latest.Version.String(), repo.distTag) {
-				t.Errorf("最新版本 %s 不包含发行版标记 %q", latest.Version.String(), repo.distTag)
+				t.Errorf("the newest version %s does not contain the distribution tag %q", latest.Version.String(), repo.distTag)
 			}
 			if latest.Component != repo.component || latest.Suite != repo.suite {
-				t.Errorf("包的上下文 = %s/%s，期望 %s/%s",
+				t.Errorf("package context = %s/%s, want %s/%s",
 					latest.Suite, latest.Component, repo.suite, repo.component)
 			}
 			if !strings.HasPrefix(latest.DownloadURL, repo.url+"/dists/"+repo.suite+"/pool/") ||
@@ -341,26 +352,26 @@ func TestRealReposListPackages(t *testing.T) {
 				t.Errorf("DownloadURL = %q", latest.DownloadURL)
 			}
 			if latest.Size.File <= 0 || latest.Size.Installed <= 0 {
-				t.Errorf("大小异常: %+v", latest.Size)
+				t.Errorf("unexpected size: %+v", latest.Size)
 			}
 			if checksum, ok := latest.Checksum(); !ok ||
 				(checksum.Type != "sha256" && checksum.Type != "sha512") {
-				t.Errorf("指纹 = %+v, %t", checksum, ok)
+				t.Errorf("checksum = %+v, %t", checksum, ok)
 			}
 			if latest.Section == "" || latest.Priority == "" || latest.Description.Synopsis == "" {
-				t.Errorf("描述信息缺失: %+v", latest)
+				t.Errorf("description information is missing: %+v", latest)
 			}
 			if !latest.DependsOn("containerd.io") || !latest.DependsOn("libc6") {
-				t.Errorf("%s 的依赖解析异常: %v", realRepoPackage, latest.Depends)
+				t.Errorf("unexpected dependency parse result for %s: %v", realRepoPackage, latest.Depends)
 			}
 			found, err := opened.FindPackage(ctx, Query{Name: realRepoPackage})
 			if err != nil {
-				t.Fatalf("FindPackage 失败: %v", err)
+				t.Fatalf("FindPackage failed: %v", err)
 			}
 			if found.Version.String() != latest.Version.String() {
-				t.Errorf("FindPackage = %s，期望 %s", found.Version.String(), latest.Version.String())
+				t.Errorf("FindPackage = %s, want %s", found.Version.String(), latest.Version.String())
 			}
-			t.Logf("%s: %d 个版本，最新 %s（%d 字节）", repo.name, len(pkgs),
+			t.Logf("%s: %d versions, newest %s (%d bytes)", repo.name, len(pkgs),
 				latest.Version.String(), latest.Size.File)
 		})
 	}
@@ -372,11 +383,12 @@ func TestRealReposPackageCount(t *testing.T) {
 		t.Run(repo.name, func(t *testing.T) {
 			opened := openRealRepo(t, repo)
 			index := opened.Indexes()[0]
-			// 只读取首选候选，避免下载未使用的压缩格式。
+			// Read only the preferred candidate, which avoids downloading unused compression
+			// formats.
 			index.Candidates = index.Candidates[:1]
 			body, err := opened.openIndex(context.Background(), index)
 			if err != nil {
-				t.Fatalf("读取索引失败: %v", err)
+				t.Fatalf("reading the index failed: %v", err)
 			}
 			defer body.Close()
 			total := 0
@@ -384,16 +396,16 @@ func TestRealReposPackageCount(t *testing.T) {
 				total++
 				return nil
 			}); err != nil {
-				t.Fatalf("解析索引失败: %v", err)
+				t.Fatalf("parsing the index failed: %v", err)
 			}
 			if total < repo.minPackages {
-				t.Errorf("索引中的包数量 = %d，期望至少 %d", total, repo.minPackages)
+				t.Errorf("package count in the index = %d, want at least %d", total, repo.minPackages)
 			}
 		})
 	}
 }
 
-// TestRealReposDownloadReachable 检查索引中给出的下载地址真实可达。
+// TestRealReposDownloadReachable checks that the download address given by the index really works.
 func TestRealReposDownloadReachable(t *testing.T) {
 	ctx := context.Background()
 	for _, repo := range realRepos() {
@@ -402,9 +414,9 @@ func TestRealReposDownloadReachable(t *testing.T) {
 			opened := openRealRepo(t, repo)
 			pkg, err := opened.FindPackage(ctx, Query{Name: realRepoPackage})
 			if err != nil {
-				t.Fatalf("查找 %s 失败: %v", realRepoPackage, err)
+				t.Fatalf("looking up %s failed: %v", realRepoPackage, err)
 			}
-			// 镜像站偶发连接重置，这里重试几次再判定。
+			// Mirrors occasionally reset connections, so retry a few times before deciding.
 			size, err := callWithRetry(t, pkg.DownloadURL, func() (int64, error) {
 				client := realRepoClient(2 * time.Minute)
 				req, err := http.NewRequestWithContext(ctx, http.MethodHead, pkg.DownloadURL, nil)
@@ -423,19 +435,20 @@ func TestRealReposDownloadReachable(t *testing.T) {
 				return resp.ContentLength, nil
 			})
 			if err != nil {
-				t.Fatalf("请求失败: %v", err)
+				t.Fatalf("request failed: %v", err)
 			}
 			if size > 0 && size != pkg.Size.File {
-				t.Errorf("远端大小 %d 与索引中的 %d 不一致", size, pkg.Size.File)
+				t.Errorf("the remote size %d does not match the %d in the index", size, pkg.Size.File)
 			}
 		})
 	}
 }
 
-// TestRealReposPackageChecksum 完整下载一个 .deb 并核对指纹（默认跳过，耗时较长）。
+// TestRealReposPackageChecksum downloads a complete .deb and checks its checksum (skipped by default
+// because it is slow).
 func TestRealReposPackageChecksum(t *testing.T) {
 	if os.Getenv("PKGREPO_FULL_DOWNLOAD") == "" {
-		t.Skip("默认跳过完整下载测试，设置 PKGREPO_FULL_DOWNLOAD=1 后启用")
+		t.Skip("skipping the full download test by default; set PKGREPO_FULL_DOWNLOAD=1 to enable it")
 	}
 	ctx := context.Background()
 	for _, repo := range realRepos() {
@@ -444,55 +457,57 @@ func TestRealReposPackageChecksum(t *testing.T) {
 			opened := openRealRepo(t, repo)
 			pkg, err := opened.FindPackage(ctx, Query{Name: realRepoPackage})
 			if err != nil {
-				t.Fatalf("查找 %s 失败: %v", realRepoPackage, err)
+				t.Fatalf("looking up %s failed: %v", realRepoPackage, err)
 			}
 			expected, ok := pkg.Checksums.Strongest()
 			if !ok {
-				t.Fatalf("索引中没有指纹: %+v", pkg.Checksums)
+				t.Fatalf("the index has no checksum: %+v", pkg.Checksums)
 			}
 			client := realRepoClient(10 * time.Minute)
 			req, err := http.NewRequestWithContext(ctx, http.MethodGet, pkg.DownloadURL, nil)
 			if err != nil {
-				t.Fatalf("构造请求失败: %v", err)
+				t.Fatalf("building the request failed: %v", err)
 			}
 			req.Header.Set("User-Agent", defaultUserAgent)
 			resp, err := client.Do(req)
 			if err != nil {
-				t.Fatalf("下载失败: %v", err)
+				t.Fatalf("download failed: %v", err)
 			}
 			defer resp.Body.Close()
 			if resp.StatusCode != http.StatusOK {
-				t.Fatalf("下载 %s = %s", pkg.DownloadURL, resp.Status)
+				t.Fatalf("GET %s = %s", pkg.DownloadURL, resp.Status)
 			}
 			hasher, err := newHash(expected.Type)
 			if err != nil {
-				t.Fatalf("不支持的算法 %q: %v", expected.Type, err)
+				t.Fatalf("unsupported algorithm %q: %v", expected.Type, err)
 			}
 			size, err := io.Copy(hasher, resp.Body)
 			if err != nil {
-				t.Fatalf("读取响应失败: %v", err)
+				t.Fatalf("reading the response failed: %v", err)
 			}
 			if size != pkg.Size.File {
-				t.Errorf("下载大小 = %d，期望 %d", size, pkg.Size.File)
+				t.Errorf("download size = %d, want %d", size, pkg.Size.File)
 			}
 			actual := hex.EncodeToString(hasher.Sum(nil))
 			if !strings.EqualFold(actual, expected.Value) {
-				t.Errorf("指纹不匹配: 期望 %s，实际 %s", expected.Value, actual)
+				t.Errorf("checksum mismatch: want %s, got %s", expected.Value, actual)
 			}
 		})
 	}
 }
 
-// TestUpstreamDebianRepository 验证 Debian 官方源特有的能力：
-// binary-all 索引（Debian 13 起架构无关包只出现在该索引）与 Sources 源码索引。
+// TestUpstreamDebianRepository verifies the capabilities specific to the official Debian repository:
+// the binary-all index (since Debian 13 architecture-independent packages only appear there) and the
+// Sources index.
 //
-// 该测试默认跳过（官方源在国内较慢），设置镜像地址后启用：
+// This test is skipped by default (the official repository is slow in China); set a mirror address to
+// enable it:
 //
 //	PKGREPO_DEBIAN_BASE=https://deb.debian.org/debian go test ./debrepo/ -run Upstream -v
 func TestUpstreamDebianRepository(t *testing.T) {
 	base := strings.TrimSuffix(strings.TrimSpace(os.Getenv("PKGREPO_DEBIAN_BASE")), "/")
 	if base == "" {
-		t.Skip("默认跳过官方源测试，设置 PKGREPO_DEBIAN_BASE 后启用（例如 https://deb.debian.org/debian）")
+		t.Skip("skipping the upstream repository test by default; set PKGREPO_DEBIAN_BASE to enable it (for example https://deb.debian.org/debian)")
 	}
 	fetcher := newCachingFetcher(&HTTPFetcher{Client: realRepoClient(4 * time.Minute)})
 	client := New(
@@ -509,37 +524,37 @@ func TestUpstreamDebianRepository(t *testing.T) {
 	if err != nil {
 		if isOfflineError(err) {
 			networkUnavailable.Store(true)
-			t.Skipf("跳过：网络不可用（%v）", err)
+			t.Skipf("skipping: the network is unavailable (%v)", err)
 		}
-		t.Fatalf("打开 Debian 源失败: %v", err)
+		t.Fatalf("opening the Debian repository failed: %v", err)
 	}
 	if len(repo.SourceIndexes()) == 0 {
-		t.Error("Debian 官方源应当提供 Sources 索引")
+		t.Error("the official Debian repository should provide a Sources index")
 	}
-	// binary-all：架构无关的包（Architecture: all）。
+	// binary-all: architecture-independent packages (Architecture: all).
 	pkg, err := repo.FindPackage(ctx, Query{Name: "ca-certificates"})
 	if err != nil {
-		t.Fatalf("查找 ca-certificates 失败: %v", err)
+		t.Fatalf("looking up ca-certificates failed: %v", err)
 	}
 	if pkg.Architecture != "all" {
-		t.Errorf("Architecture = %q，期望 all", pkg.Architecture)
+		t.Errorf("Architecture = %q, want all", pkg.Architecture)
 	}
-	// Sources：源码包与 .dsc 文件。
+	// Sources: source packages and .dsc files.
 	source, err := repo.FindSource(ctx, SourceQuery{Name: "nginx"})
 	if err != nil {
-		t.Fatalf("查找源码包失败: %v", err)
+		t.Fatalf("looking up the source package failed: %v", err)
 	}
 	dsc, ok := source.DSC()
 	if !ok {
-		t.Fatal("源码包中没有 .dsc 文件")
+		t.Fatal("the source package has no .dsc file")
 	}
 	dscURL, err := source.FileURL(dsc.Path)
 	if err != nil {
-		t.Fatalf("FileURL 失败: %v", err)
+		t.Fatalf("FileURL failed: %v", err)
 	}
 	if !strings.HasPrefix(dscURL, base+"/pool/") || !strings.HasSuffix(dscURL, ".dsc") {
-		t.Errorf("dsc 地址 = %q", dscURL)
+		t.Errorf("dsc address = %q", dscURL)
 	}
-	t.Logf("Debian %s：ca-certificates %s（all），源码包 nginx %s",
+	t.Logf("Debian %s: ca-certificates %s (all), source package nginx %s",
 		repo.Suite, pkg.Version.String(), source.Version.String())
 }
