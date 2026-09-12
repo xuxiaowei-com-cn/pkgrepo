@@ -19,4 +19,6 @@ jobs:
         with:
           go-version: 1.27
       - name: Test
+        env:
+          PKGREPO_FULL_DOWNLOAD: 1
         run: go test -v ./...
