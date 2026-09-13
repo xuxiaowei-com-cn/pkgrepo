@@ -392,7 +392,7 @@ func TestRealReposPackageCount(t *testing.T) {
 			}
 			defer body.Close()
 			total := 0
-			if err := ParsePackages(body, func(*DebPackage) error {
+			if err := ParsePackages(body, func(*Package) error {
 				total++
 				return nil
 			}); err != nil {

@@ -51,11 +51,11 @@ type Query struct {
 	// Sort is the sort order; the zero value is SortDefault.
 	Sort SortOrder
 	// Filter is a custom filter function; packages for which it returns false are excluded.
-	Filter func(*RpmPackage) bool
+	Filter func(*Package) bool
 }
 
 // Match reports whether the package satisfies the query conditions.
-func (q Query) Match(p *RpmPackage) bool {
+func (q Query) Match(p *Package) bool {
 	if p == nil {
 		return false
 	}
@@ -147,7 +147,7 @@ func (q Query) matchField(got, want string) bool {
 func hasGlobMeta(s string) bool { return strings.ContainsAny(s, "*?[") }
 
 // sort orders the results according to q.Sort.
-func (q Query) sort(pkgs []RpmPackage) {
+func (q Query) sort(pkgs []Package) {
 	switch q.Sort {
 	case SortNone:
 		return
@@ -170,7 +170,7 @@ func (q Query) sort(pkgs []RpmPackage) {
 
 // comparePackages compares two packages: name ascending, architecture ascending, and version
 // ascending or descending depending on newestFirst.
-func comparePackages(a, b RpmPackage, newestFirst bool) int {
+func comparePackages(a, b Package, newestFirst bool) int {
 	if c := strings.Compare(a.Name, b.Name); c != 0 {
 		return c
 	}
@@ -185,7 +185,7 @@ func comparePackages(a, b RpmPackage, newestFirst bool) int {
 
 // retainLatest keeps only the newest package for every "name + architecture", preserving the
 // original order.
-func retainLatest(pkgs []RpmPackage) []RpmPackage {
+func retainLatest(pkgs []Package) []Package {
 	best := make(map[string]int, len(pkgs))
 	for i := range pkgs {
 		key := pkgs[i].Name + "\x00" + pkgs[i].Arch
@@ -194,7 +194,7 @@ func retainLatest(pkgs []RpmPackage) []RpmPackage {
 			best[key] = i
 		}
 	}
-	latest := make([]RpmPackage, 0, len(best))
+	latest := make([]Package, 0, len(best))
 	for i := range pkgs {
 		key := pkgs[i].Name + "\x00" + pkgs[i].Arch
 		if best[key] == i {

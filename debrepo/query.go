@@ -57,11 +57,11 @@ type Query struct {
 	// Sort is the sort order; the zero value is SortDefault.
 	Sort SortOrder
 	// Filter is a custom filter function; packages for which it returns false are excluded.
-	Filter func(*DebPackage) bool
+	Filter func(*Package) bool
 }
 
 // Match reports whether the package satisfies the query conditions.
-func (q Query) Match(p *DebPackage) bool {
+func (q Query) Match(p *Package) bool {
 	if p == nil {
 		return false
 	}
@@ -115,7 +115,7 @@ func (q Query) matchVersion(got, want string) bool {
 	return got == want
 }
 
-func (q Query) matchProvides(p *DebPackage, name string) bool {
+func (q Query) matchProvides(p *Package, name string) bool {
 	for _, dep := range p.Provides {
 		for _, alt := range dep.Alternatives {
 			if q.matchField(alt.Name, name) {
@@ -129,7 +129,7 @@ func (q Query) matchProvides(p *DebPackage, name string) bool {
 func hasGlobMeta(s string) bool { return strings.ContainsAny(s, "*?[") }
 
 // sort orders the results according to q.Sort.
-func (q Query) sort(pkgs []DebPackage) {
+func (q Query) sort(pkgs []Package) {
 	switch q.Sort {
 	case SortNone:
 		return
@@ -148,7 +148,7 @@ func (q Query) sort(pkgs []DebPackage) {
 
 // comparePackages compares two packages: name ascending, architecture ascending, and version
 // ascending or descending depending on newestFirst.
-func comparePackages(a, b DebPackage, newestFirst bool) int {
+func comparePackages(a, b Package, newestFirst bool) int {
 	if c := strings.Compare(a.Name, b.Name); c != 0 {
 		return c
 	}
@@ -166,7 +166,7 @@ func comparePackages(a, b DebPackage, newestFirst bool) int {
 
 // retainLatest keeps only the newest package for every "name + architecture + component", preserving
 // the original order.
-func retainLatest(pkgs []DebPackage) []DebPackage {
+func retainLatest(pkgs []Package) []Package {
 	best := make(map[string]int, len(pkgs))
 	for i := range pkgs {
 		key := pkgs[i].Name + "\x00" + pkgs[i].Architecture + "\x00" + pkgs[i].Component
@@ -175,7 +175,7 @@ func retainLatest(pkgs []DebPackage) []DebPackage {
 			best[key] = i
 		}
 	}
-	latest := make([]DebPackage, 0, len(best))
+	latest := make([]Package, 0, len(best))
 	for i := range pkgs {
 		key := pkgs[i].Name + "\x00" + pkgs[i].Architecture + "\x00" + pkgs[i].Component
 		if best[key] == i {

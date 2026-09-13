@@ -70,8 +70,8 @@ func TestDecompress(t *testing.T) {
 			}
 
 			// Stream the decompressed data through the parser to confirm the handoff works.
-			var pkg RpmPackage
-			if err := ParsePrimary(bytes.NewReader(got), func(p *RpmPackage) error {
+			var pkg Package
+			if err := ParsePrimary(bytes.NewReader(got), func(p *Package) error {
 				pkg = *p
 				return nil
 			}); err != nil {

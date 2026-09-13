@@ -37,12 +37,12 @@ func (d Description) String() string {
 // IsZero reports whether the description is empty.
 func (d Description) IsZero() bool { return d.Synopsis == "" && d.Long == "" }
 
-// DebPackage is the metadata of a single binary package, corresponding to one paragraph in the
-// Packages index.
+// Package is the metadata of a single binary package, corresponding to one paragraph in the Packages
+// index.
 //
 // The field names match those of the Debian control file; the struct also carries context such as
 // DownloadURL, RepoURL, RepoID, Suite, and Component, which the repository fills in automatically.
-type DebPackage struct {
+type Package struct {
 	// Name is the package name.
 	Name string `json:"name"`
 	// Source is the source package name and SourceVersion is the version in parentheses inside the
@@ -107,21 +107,21 @@ type DebPackage struct {
 	Fields map[string]string `json:"fields,omitempty"`
 }
 
-// packageDependencyFields lists the DebPackage fields that must be parsed as dependency relations.
+// packageDependencyFields lists the Package fields that must be parsed as dependency relations.
 var packageDependencyFields = []struct {
 	field string
-	set   func(*DebPackage, Dependencies)
+	set   func(*Package, Dependencies)
 }{
-	{"Depends", func(p *DebPackage, d Dependencies) { p.Depends = d }},
-	{"Pre-Depends", func(p *DebPackage, d Dependencies) { p.PreDepends = d }},
-	{"Recommends", func(p *DebPackage, d Dependencies) { p.Recommends = d }},
-	{"Suggests", func(p *DebPackage, d Dependencies) { p.Suggests = d }},
-	{"Breaks", func(p *DebPackage, d Dependencies) { p.Breaks = d }},
-	{"Conflicts", func(p *DebPackage, d Dependencies) { p.Conflicts = d }},
-	{"Provides", func(p *DebPackage, d Dependencies) { p.Provides = d }},
-	{"Replaces", func(p *DebPackage, d Dependencies) { p.Replaces = d }},
-	{"Enhances", func(p *DebPackage, d Dependencies) { p.Enhances = d }},
-	{"Built-Using", func(p *DebPackage, d Dependencies) { p.BuiltUsing = d }},
+	{"Depends", func(p *Package, d Dependencies) { p.Depends = d }},
+	{"Pre-Depends", func(p *Package, d Dependencies) { p.PreDepends = d }},
+	{"Recommends", func(p *Package, d Dependencies) { p.Recommends = d }},
+	{"Suggests", func(p *Package, d Dependencies) { p.Suggests = d }},
+	{"Breaks", func(p *Package, d Dependencies) { p.Breaks = d }},
+	{"Conflicts", func(p *Package, d Dependencies) { p.Conflicts = d }},
+	{"Provides", func(p *Package, d Dependencies) { p.Provides = d }},
+	{"Replaces", func(p *Package, d Dependencies) { p.Replaces = d }},
+	{"Enhances", func(p *Package, d Dependencies) { p.Enhances = d }},
+	{"Built-Using", func(p *Package, d Dependencies) { p.BuiltUsing = d }},
 }
 
 // ParsePackages streams over the Packages index, calling fn once per parsed package.
@@ -129,7 +129,7 @@ var packageDependencyFields = []struct {
 // An error returned by fn stops parsing and is returned unchanged, which makes it easy to exit the
 // iteration early. Because parsing is streaming, memory usage stays constant even for repositories
 // with hundreds of thousands of packages.
-func ParsePackages(r io.Reader, fn func(*DebPackage) error) error {
+func ParsePackages(r io.Reader, fn func(*Package) error) error {
 	if fn == nil {
 		return nil
 	}
@@ -142,9 +142,9 @@ func ParsePackages(r io.Reader, fn func(*DebPackage) error) error {
 	})
 }
 
-// ParsePackageStanza parses one paragraph of the Packages index into a DebPackage.
-func ParsePackageStanza(stanza *Stanza) (*DebPackage, error) {
-	pkg := &DebPackage{}
+// ParsePackageStanza parses one paragraph of the Packages index into a Package.
+func ParsePackageStanza(stanza *Stanza) (*Package, error) {
+	pkg := &Package{}
 	pkg.Name = stanza.Get("Package")
 	if pkg.Name == "" {
 		return nil, fmt.Errorf("%w: missing the Package field", ErrInvalidPackage)
@@ -270,7 +270,7 @@ func firstNonEmpty(values ...string) string {
 
 // SourceName returns the source package name (which is the package name when the Source field is
 // absent).
-func (p *DebPackage) SourceName() string {
+func (p *Package) SourceName() string {
 	if p.Source != "" {
 		return p.Source
 	}
@@ -279,13 +279,13 @@ func (p *DebPackage) SourceName() string {
 
 // IsArchitectureIndependent reports whether the package is architecture-independent
 // (Architecture: all).
-func (p *DebPackage) IsArchitectureIndependent() bool { return p.Architecture == "all" }
+func (p *Package) IsArchitectureIndependent() bool { return p.Architecture == "all" }
 
 // Checksum returns the strongest available checksum (sha512 > sha256 > sha1 > md5).
-func (p *DebPackage) Checksum() (Checksum, bool) { return p.Checksums.Strongest() }
+func (p *Package) Checksum() (Checksum, bool) { return p.Checksums.Strongest() }
 
 // BaseFilename returns the package file name (the last segment of Filename).
-func (p *DebPackage) BaseFilename() string {
+func (p *Package) BaseFilename() string {
 	if idx := strings.LastIndexByte(p.Filename, '/'); idx >= 0 {
 		return p.Filename[idx+1:]
 	}
@@ -293,7 +293,7 @@ func (p *DebPackage) BaseFilename() string {
 }
 
 // ID returns an identifier of the form "nginx_1.22.1-9_amd64".
-func (p *DebPackage) ID() string {
+func (p *Package) ID() string {
 	parts := []string{p.Name}
 	if !p.Version.IsZero() {
 		parts = append(parts, p.Version.String())
@@ -305,20 +305,20 @@ func (p *DebPackage) ID() string {
 }
 
 // String returns the package identifier (the same as ID).
-func (p *DebPackage) String() string { return p.ID() }
+func (p *Package) String() string { return p.ID() }
 
 // Field returns the raw field value from the index; the field name is case-insensitive.
-func (p *DebPackage) Field(name string) string { return p.Fields[strings.ToLower(name)] }
+func (p *Package) Field(name string) string { return p.Fields[strings.ToLower(name)] }
 
 // HasField reports whether the given field exists in the index.
-func (p *DebPackage) HasField(name string) bool {
+func (p *Package) HasField(name string) bool {
 	_, ok := p.Fields[strings.ToLower(name)]
 	return ok
 }
 
 // ProvidesPackage reports whether the package provides the given virtual package (Provides field).
-func (p *DebPackage) ProvidesPackage(name string) bool { return p.Provides.Has(name) }
+func (p *Package) ProvidesPackage(name string) bool { return p.Provides.Has(name) }
 
 // DependsOn reports whether the package directly depends on the given package (Depends field,
 // including alternatives).
-func (p *DebPackage) DependsOn(name string) bool { return p.Depends.Has(name) }
+func (p *Package) DependsOn(name string) bool { return p.Depends.Has(name) }

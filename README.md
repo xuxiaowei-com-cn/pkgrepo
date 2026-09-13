@@ -93,7 +93,7 @@ func main() {
 
 | Function / method | Description |
 | --- | --- |
-| `rpmrepo.ListPackages(ctx, repoURL, name, opts...)` | Lists packages by name (wildcards supported), returns `[]RpmPackage` |
+| `rpmrepo.ListPackages(ctx, repoURL, name, opts...)` | Lists packages by name (wildcards supported), returns `[]Package` |
 | `rpmrepo.FindPackages(ctx, repoURL, Query, opts...)` | Queries by `Query` conditions |
 | `rpmrepo.FindPackage(ctx, repoURL, name, opts...)` | Returns the newest version, or `ErrPackageNotFound` |
 | `rpmrepo.Open(ctx, repoURL, opts...)` | Parses repository metadata and returns a `*Repository` reusable across queries |
@@ -108,7 +108,7 @@ name+arch), `Limit`, `IgnoreCase`, `Sort` and `Filter` (custom predicate).
 
 ### Returned metadata
 
-`RpmPackage` comes from primary.xml; the main fields are:
+`Package` comes from primary.xml; the main fields are:
 
 | Field | Description |
 | --- | --- |
@@ -252,7 +252,7 @@ index is scanned as well), plus `WithTimeout`, `WithHTTPClient`, `WithUserAgent`
 
 ### Returned metadata
 
-`DebPackage` comes from the `Packages` index; the main fields are:
+`Package` comes from the `Packages` index; the main fields are:
 
 | Field | Description |
 | --- | --- |
@@ -263,7 +263,7 @@ index is scanned as well), plus `WithTimeout`, `WithHTTPClient`, `WithUserAgent`
 | `Size{File,Installed}` | `.deb` size in bytes and installed size in KiB |
 | `Description{Synopsis,Long}` | Synopsis and long description (` .` lines become blank lines) |
 | `Maintainer`, `OriginalMaintainer`, `Homepage`, `Section`, `Priority`, `Essential`, `MultiArch` | Descriptive information |
-| `Depends`, `PreDepends`, `Recommends`, `Suggests`, `Breaks`, `Conflicts`, `Provides`, `Replaces`, `Enhances`, `BuiltUsing` | Dependencies with alternatives and version constraints (`Dependencies.Has`, `DebPackage.DependsOn`, `DebPackage.ProvidesPackage`) |
+| `Depends`, `PreDepends`, `Recommends`, `Suggests`, `Breaks`, `Conflicts`, `Provides`, `Replaces`, `Enhances`, `BuiltUsing` | Dependencies with alternatives and version constraints (`Dependencies.Has`, `Package.DependsOn`, `Package.ProvidesPackage`) |
 | `Suite`, `Component`, `RepoURL`, `RepoID` | Repository context |
 | `Fields` | Every raw field of the stanza (`Field(name)`), e.g. `Tag`, `Task`, `Bugs`, `Package-Type` |
 
