@@ -2,7 +2,6 @@ package rpmrepo
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"net/url"
@@ -32,7 +31,20 @@ type Repository struct {
 
 // Open reads and parses the repository metadata. repoURL can be the repository root address, the
 // address of repomd.xml, a local directory (./repo, /data/repo), or a file:// address.
+//
+// Open reads a single repository; when further addresses are configured with WithRepositories it
+// returns ErrMultipleRepositories, because a *Repository describes one repository. Use ListPackages
+// or FindPackages to query several repositories at once.
 func (c *Client) Open(ctx context.Context, repoURL string) (*Repository, error) {
+	if len(c.repositories) > 0 {
+		return nil, ErrMultipleRepositories
+	}
+	return c.open(ctx, repoURL)
+}
+
+// open reads and parses a single repository; it is the implementation shared by Open and the
+// multi-repository queries, which must not go through the single-repository guard of Open.
+func (c *Client) open(ctx context.Context, repoURL string) (*Repository, error) {
 	base, err := normalizeRepoURL(repoURL)
 	if err != nil {
 		return nil, err
@@ -204,7 +216,7 @@ func (c *verifyCloser) Close() error { return c.closer.Close() }
 func normalizeRepoURL(rawURL string) (*url.URL, error) {
 	rawURL = strings.TrimSpace(rawURL)
 	if rawURL == "" {
-		return nil, errors.New("rpmrepo: repository address must not be empty")
+		return nil, ErrNoRepository
 	}
 	// Without a scheme prefix, treat the input as a local path.
 	if !strings.Contains(rawURL, "://") {

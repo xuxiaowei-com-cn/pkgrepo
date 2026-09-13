@@ -4,6 +4,7 @@
 // Usage examples:
 //
 //	rpmrepo packages https://download.docker.com/linux/centos/7/x86_64/stable docker-ce
+//	rpmrepo packages https://repo.almalinux.org/almalinux/9/BaseOS/x86_64/os https://repo.almalinux.org/almalinux/9/AppStream/x86_64/os nginx
 //	rpmrepo packages --arch x86_64 --latest --json <repository URL> docker-ce
 //	rpmrepo repomd <repository URL>
 package main
@@ -15,6 +16,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strings"
 	"text/tabwriter"
 	"time"
 
@@ -49,12 +51,15 @@ func run(args []string) error {
 
 func usage() {
 	fmt.Fprint(os.Stderr, `Usage:
-  rpmrepo packages [options] <repository URL> <package name>
+  rpmrepo packages [options] <repository URL> [<repository URL>...] <package name>
   rpmrepo repomd   [options] <repository URL>
 
 Subcommands:
   packages  list all packages of the given software (the name supports the * ? [abc] wildcards)
   repomd    show the repository metadata index (repomd.xml)
+
+Several repository URLs can be given; every repository is read and the results are merged into a
+single list (sorting, -latest, and -limit then apply to the merged list).
 
 Options (packages):
   -arch string      restrict the architecture, for example x86_64, noarch, or src
@@ -68,8 +73,33 @@ Options (packages):
 
 Examples:
   rpmrepo packages https://download.docker.com/linux/centos/7/x86_64/stable docker-ce
+  rpmrepo packages https://repo.almalinux.org/almalinux/9/BaseOS/x86_64/os https://repo.almalinux.org/almalinux/9/AppStream/x86_64/os nginx
   rpmrepo packages -arch x86_64 -latest -json https://download.docker.com/linux/centos/7/x86_64/stable docker-ce
 `)
+}
+
+// splitRepositories splits the positional arguments into repository URLs and the trailing package
+// name. Every argument before the last one is a repository URL, so an argument that cannot address a
+// repository (a package name given in the wrong position) is reported as a usage error.
+func splitRepositories(args []string) ([]string, string, error) {
+	repoURLs, name := args[:len(args)-1], args[len(args)-1]
+	for _, repoURL := range repoURLs {
+		if looksLikeRepository(repoURL) {
+			continue
+		}
+		return nil, "", fmt.Errorf("%q is not a repository address; the last argument is the package name and every argument before it must be a repository URL", repoURL)
+	}
+	return repoURLs, name, nil
+}
+
+// looksLikeRepository reports whether an argument can address a repository: it carries a scheme, it
+// contains a path separator, or it is an existing local directory.
+func looksLikeRepository(arg string) bool {
+	if strings.Contains(arg, "://") || strings.ContainsAny(arg, `/\`) {
+		return true
+	}
+	info, err := os.Stat(arg)
+	return err == nil && info.IsDir()
 }
 
 func runPackages(args []string) error {
@@ -85,11 +115,15 @@ func runPackages(args []string) error {
 	if err := flags.Parse(args); err != nil {
 		return err
 	}
-	if flags.NArg() != 2 {
+	if flags.NArg() < 2 {
 		usage()
-		return errors.New("the packages subcommand requires both <repository URL> and <package name>")
+		return errors.New("the packages subcommand requires at least one <repository URL> and a <package name>")
 	}
-	repoURL, name := flags.Arg(0), flags.Arg(1)
+	repoURLs, name, err := splitRepositories(flags.Args())
+	if err != nil {
+		usage()
+		return err
+	}
 
 	order, err := parseSortOrder(*sortBy)
 	if err != nil {
@@ -104,12 +138,9 @@ func runPackages(args []string) error {
 		Sort:    order,
 	}
 	ctx := context.Background()
-	client := rpmrepo.New(rpmrepo.WithTimeout(*timeout), rpmrepo.WithChecksumVerification(*verify))
-	repo, err := client.Open(ctx, repoURL)
-	if err != nil {
-		return err
-	}
-	pkgs, err := repo.FindPackages(ctx, query)
+	client := rpmrepo.New(rpmrepo.WithTimeout(*timeout), rpmrepo.WithChecksumVerification(*verify),
+		rpmrepo.WithRepositories(repoURLs[1:]...))
+	pkgs, summary, err := findPackages(ctx, client, repoURLs, query)
 	if err != nil {
 		return err
 	}
@@ -122,7 +153,7 @@ func runPackages(args []string) error {
 		return encoder.Encode(pkgs)
 	}
 
-	fmt.Fprintf(os.Stderr, "%d packages (repository %s, revision %s)\n", len(pkgs), repo.ID, repo.Revision)
+	fmt.Fprintf(os.Stderr, "%d packages (%s)\n", len(pkgs), summary)
 	writer := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 	fmt.Fprintln(writer, "NEVRA\tSIZE\tBUILD TIME\tCHECKSUM\tDOWNLOAD URL")
 	for i := range pkgs {
@@ -135,6 +166,28 @@ func runPackages(args []string) error {
 			pkg.NEVRA(), humanSize(pkg.Size.Package), build, shortChecksum(pkg.Checksum), pkg.DownloadURL)
 	}
 	return writer.Flush()
+}
+
+// findPackages reads the given repositories and returns the matching packages together with a
+// summary of what was read. A single repository keeps the detailed summary (id and revision), while
+// several repositories list their addresses.
+func findPackages(ctx context.Context, client *rpmrepo.Client, repoURLs []string, q rpmrepo.Query) ([]rpmrepo.Package, string, error) {
+	if len(repoURLs) == 1 {
+		repo, err := client.Open(ctx, repoURLs[0])
+		if err != nil {
+			return nil, "", err
+		}
+		pkgs, err := repo.FindPackages(ctx, q)
+		if err != nil {
+			return nil, "", err
+		}
+		return pkgs, fmt.Sprintf("repository %s, revision %s", repo.ID, repo.Revision), nil
+	}
+	pkgs, err := client.FindPackages(ctx, repoURLs[0], q)
+	if err != nil {
+		return nil, "", err
+	}
+	return pkgs, fmt.Sprintf("repositories %s", strings.Join(repoURLs, ", ")), nil
 }
 
 func runRepoMD(args []string) error {

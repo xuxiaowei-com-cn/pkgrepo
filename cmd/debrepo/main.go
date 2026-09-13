@@ -4,6 +4,7 @@
 // Usage examples:
 //
 //	debrepo packages -suite bookworm -arch amd64 https://deb.debian.org/debian nginx
+//	debrepo packages -suite bookworm https://deb.debian.org/debian https://security.debian.org/debian-security nginx
 //	debrepo packages -suite jammy -latest -json http://archive.ubuntu.com/ubuntu bash
 //	debrepo sources -suite bookworm https://deb.debian.org/debian nginx
 //	debrepo release -suite bookworm https://deb.debian.org/debian
@@ -55,8 +56,8 @@ func run(args []string) error {
 
 func usage() {
 	fmt.Fprint(os.Stderr, `Usage:
-  debrepo packages [options] <repository URL> <package name>
-  debrepo sources  [options] <repository URL> <source package name>
+  debrepo packages [options] <repository URL> [<repository URL>...] <package name>
+  debrepo sources  [options] <repository URL> [<repository URL>...] <source package name>
   debrepo release  [options] <repository URL>
   debrepo indexes  [options] <repository URL>
 
@@ -65,6 +66,10 @@ Subcommands:
   sources   query source packages (the Sources index)
   release   show the Release/InRelease metadata (distribution information and index file list)
   indexes   show the Packages/Sources indexes actually used (component, architecture, compression)
+
+Several repository URLs can be given to packages/sources; every repository is read with the same
+suite, component, and architecture settings and the results are merged into a single list (sorting,
+-latest, and -limit then apply to the merged list).
 
 Options:
   -suite string       distribution suite/codename, for example bookworm, jammy, or stable
@@ -81,6 +86,7 @@ Options:
 
 Examples:
   debrepo packages -suite bookworm https://deb.debian.org/debian nginx
+  debrepo packages -suite bookworm https://deb.debian.org/debian https://security.debian.org/debian-security nginx
   debrepo packages -suite jammy -arch amd64 -latest -json http://archive.ubuntu.com/ubuntu bash
   debrepo packages -suite bookworm -component '*' -latest https://deb.debian.org/debian docker-ce
   debrepo sources -suite bookworm https://deb.debian.org/debian nginx
@@ -138,6 +144,30 @@ func splitFlag(value string) []string {
 	return items
 }
 
+// splitRepositories splits the positional arguments into repository URLs and the trailing package
+// name. Every argument before the last one is a repository URL, so an argument that cannot address a
+// repository (a package name given in the wrong position) is reported as a usage error.
+func splitRepositories(args []string) ([]string, string, error) {
+	repoURLs, name := args[:len(args)-1], args[len(args)-1]
+	for _, repoURL := range repoURLs {
+		if looksLikeRepository(repoURL) {
+			continue
+		}
+		return nil, "", fmt.Errorf("%q is not a repository address; the last argument is the package name and every argument before it must be a repository URL", repoURL)
+	}
+	return repoURLs, name, nil
+}
+
+// looksLikeRepository reports whether an argument can address a repository: it carries a scheme, it
+// contains a path separator, or it is an existing local directory.
+func looksLikeRepository(arg string) bool {
+	if strings.Contains(arg, "://") || strings.ContainsAny(arg, `/\`) {
+		return true
+	}
+	info, err := os.Stat(arg)
+	return err == nil && info.IsDir()
+}
+
 func runPackages(args []string) error {
 	flags := flag.NewFlagSet("packages", flag.ContinueOnError)
 	common := registerCommon(flags)
@@ -149,11 +179,15 @@ func runPackages(args []string) error {
 	if err := flags.Parse(args); err != nil {
 		return err
 	}
-	if flags.NArg() != 2 {
+	if flags.NArg() < 2 {
 		usage()
-		return errors.New("the packages subcommand requires both <repository URL> and <package name>")
+		return errors.New("the packages subcommand requires at least one <repository URL> and a <package name>")
 	}
-	repoURL, name := flags.Arg(0), flags.Arg(1)
+	repoURLs, name, err := splitRepositories(flags.Args())
+	if err != nil {
+		usage()
+		return err
+	}
 	order, err := parseSortOrder(*sortBy)
 	if err != nil {
 		return err
@@ -166,11 +200,8 @@ func runPackages(args []string) error {
 		Sort:    order,
 	}
 	ctx := context.Background()
-	repo, err := debrepo.Open(ctx, repoURL, common.options()...)
-	if err != nil {
-		return err
-	}
-	pkgs, err := repo.FindPackages(ctx, query)
+	client := debrepo.New(append(common.options(), debrepo.WithRepositories(repoURLs[1:]...))...)
+	pkgs, summary, err := findPackages(ctx, client, repoURLs, query)
 	if err != nil {
 		return err
 	}
@@ -184,8 +215,7 @@ func runPackages(args []string) error {
 		return encoder.Encode(pkgs)
 	}
 
-	fmt.Fprintf(os.Stderr, "%d packages (repository %s, suite %s%s)\n",
-		len(pkgs), repo.ID, repo.Suite, releaseInfo(repo))
+	fmt.Fprintf(os.Stderr, "%d packages (%s)\n", len(pkgs), summary)
 	writer := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 	fmt.Fprintln(writer, "NAME\tVERSION\tARCH\tCOMPONENT\tSIZE\tCHECKSUM\tDOWNLOAD URL")
 	for i := range pkgs {
@@ -212,11 +242,15 @@ func runSources(args []string) error {
 	if err := flags.Parse(args); err != nil {
 		return err
 	}
-	if flags.NArg() != 2 {
+	if flags.NArg() < 2 {
 		usage()
-		return errors.New("the sources subcommand requires both <repository URL> and <source package name>")
+		return errors.New("the sources subcommand requires at least one <repository URL> and a <source package name>")
 	}
-	repoURL, name := flags.Arg(0), flags.Arg(1)
+	repoURLs, name, err := splitRepositories(flags.Args())
+	if err != nil {
+		usage()
+		return err
+	}
 	order, err := parseSortOrder(*sortBy)
 	if err != nil {
 		return err
@@ -229,11 +263,8 @@ func runSources(args []string) error {
 		Sort:    order,
 	}
 	ctx := context.Background()
-	repo, err := debrepo.Open(ctx, repoURL, common.options()...)
-	if err != nil {
-		return err
-	}
-	sources, err := repo.FindSources(ctx, query)
+	client := debrepo.New(append(common.options(), debrepo.WithRepositories(repoURLs[1:]...))...)
+	sources, summary, err := findSources(ctx, client, repoURLs, query)
 	if err != nil {
 		return err
 	}
@@ -247,8 +278,7 @@ func runSources(args []string) error {
 		return encoder.Encode(sources)
 	}
 
-	fmt.Fprintf(os.Stderr, "%d source packages (repository %s, suite %s%s)\n",
-		len(sources), repo.ID, repo.Suite, releaseInfo(repo))
+	fmt.Fprintf(os.Stderr, "%d source packages (%s)\n", len(sources), summary)
 	writer := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 	fmt.Fprintln(writer, "SOURCE\tVERSION\tCOMPONENT\tDIRECTORY\tFILES\tDSC URL")
 	for i := range sources {
@@ -264,6 +294,48 @@ func runSources(args []string) error {
 			source.Directory, len(source.Files), dscURL)
 	}
 	return writer.Flush()
+}
+
+// findPackages reads the given repositories and returns the matching binary packages together with a
+// summary of what was read. A single repository keeps the detailed summary (id and suite), while
+// several repositories list their addresses.
+func findPackages(ctx context.Context, client *debrepo.Client, repoURLs []string, q debrepo.Query) ([]debrepo.Package, string, error) {
+	if len(repoURLs) == 1 {
+		repo, err := client.Open(ctx, repoURLs[0])
+		if err != nil {
+			return nil, "", err
+		}
+		pkgs, err := repo.FindPackages(ctx, q)
+		if err != nil {
+			return nil, "", err
+		}
+		return pkgs, fmt.Sprintf("repository %s, suite %s%s", repo.ID, repo.Suite, releaseInfo(repo)), nil
+	}
+	pkgs, err := client.FindPackages(ctx, repoURLs[0], q)
+	if err != nil {
+		return nil, "", err
+	}
+	return pkgs, fmt.Sprintf("repositories %s", strings.Join(repoURLs, ", ")), nil
+}
+
+// findSources works like findPackages for the Sources index.
+func findSources(ctx context.Context, client *debrepo.Client, repoURLs []string, q debrepo.SourceQuery) ([]debrepo.Source, string, error) {
+	if len(repoURLs) == 1 {
+		repo, err := client.Open(ctx, repoURLs[0])
+		if err != nil {
+			return nil, "", err
+		}
+		sources, err := repo.FindSources(ctx, q)
+		if err != nil {
+			return nil, "", err
+		}
+		return sources, fmt.Sprintf("repository %s, suite %s%s", repo.ID, repo.Suite, releaseInfo(repo)), nil
+	}
+	sources, err := client.FindSources(ctx, repoURLs[0], q)
+	if err != nil {
+		return nil, "", err
+	}
+	return sources, fmt.Sprintf("repositories %s", strings.Join(repoURLs, ", ")), nil
 }
 
 func runRelease(args []string) error {

@@ -10,6 +10,15 @@ var (
 	// (repodata/repomd.xml cannot be read).
 	ErrNotRepository = errors.New("rpmrepo: not a valid rpm repository, cannot read repodata/repomd.xml")
 
+	// ErrNoRepository indicates that no repository address was given: the address is empty and no
+	// address is configured with WithRepositories.
+	ErrNoRepository = errors.New("rpmrepo: repository address must not be empty")
+
+	// ErrMultipleRepositories indicates that a single-repository function (Open) was called while
+	// further repository addresses are configured with WithRepositories; use ListPackages or
+	// FindPackages to query several repositories.
+	ErrMultipleRepositories = errors.New("rpmrepo: Open reads a single repository, but several repository addresses are configured")
+
 	// ErrPrimaryNotFound indicates that repomd.xml has no primary metadata entry.
 	ErrPrimaryNotFound = errors.New("rpmrepo: repomd.xml is missing primary metadata")
 

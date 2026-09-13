@@ -97,6 +97,7 @@ func main() {
 | `rpmrepo.FindPackages(ctx, repoURL, Query, opts...)` | Queries by `Query` conditions |
 | `rpmrepo.FindPackage(ctx, repoURL, name, opts...)` | Returns the newest version, or `ErrPackageNotFound` |
 | `rpmrepo.Open(ctx, repoURL, opts...)` | Parses repository metadata and returns a `*Repository` reusable across queries |
+| `rpmrepo.WithRepositories(urls...)` | Queries several repositories at once and merges the results |
 | `(*Repository).Scan(ctx, fn)` | Streams every package; memory usage is independent of the package count |
 | `(*Repository).Packages(ctx)` | Returns every package in the repository |
 | `(*Repository).FindPackages(ctx, Query)` | Queries an already-opened repository |
@@ -105,6 +106,24 @@ func main() {
 `Query` supports `Name` (wildcards), `Arch` (`src` also matches `nosrc`), `Provides` (lookup by
 capability), `Epoch`/`Version`/`Release` (exact pinning), `Latest` (keep only the newest per
 name+arch), `Limit`, `IgnoreCase`, `Sort` and `Filter` (custom predicate).
+
+### Querying several repositories
+
+`WithRepositories` adds further repository addresses to `ListPackages`, `FindPackages`, and
+`FindPackage`. Every address is read with the same settings and the results are merged into a single
+list, so sorting, `Latest`, and `Limit` apply to the merged result, and every package keeps the
+`RepoURL` and `RepoID` of the repository it came from:
+
+```go
+pkgs, err := rpmrepo.ListPackages(ctx,
+	"https://repo.almalinux.org/almalinux/9/BaseOS/x86_64/os", "nginx",
+	rpmrepo.WithRepositories("https://repo.almalinux.org/almalinux/9/AppStream/x86_64/os"))
+```
+
+The address given to the call may be empty when `WithRepositories` supplies every address, repeated
+addresses are read once, and a repository that cannot be read fails the whole query. `Open` keeps
+reading a single repository and returns `ErrMultipleRepositories` when further addresses are
+configured.
 
 ### Returned metadata
 
@@ -233,6 +252,7 @@ func main() {
 | `debrepo.ListSources(ctx, repoURL, name, opts...)` | Lists source packages from the `Sources` index |
 | `debrepo.FindSources(ctx, repoURL, SourceQuery, opts...)` | Queries source packages |
 | `debrepo.Open(ctx, repoURL, opts...)` | Parses `Release`/`InRelease` and returns a reusable `*Repository` |
+| `debrepo.WithRepositories(urls...)` | Queries several repositories at once and merges the results |
 | `(*Repository).Indexes()` / `SourceIndexes()` | The discovered index files (component, architecture, compression, size, checksum) |
 | `(*Repository).Scan(ctx, fn)` / `ScanSources(ctx, fn)` | Streams every package; memory usage is independent of the package count |
 | `(*Repository).Packages(ctx)` / `Sources(ctx)` | Returns every binary / source package |
@@ -249,6 +269,29 @@ index is scanned as well), plus `WithTimeout`, `WithHTTPClient`, `WithUserAgent`
 `Query` supports `Name` (wildcards), `Arch`, `Component`, `Version` (exact), `Provides`,
 `Section`, `Priority`, `Essential`, `Latest` (newest per name+architecture+component), `Limit`,
 `IgnoreCase`, `Sort` and `Filter`. `SourceQuery` is the source-package equivalent.
+
+### Querying several repositories
+
+`WithRepositories` adds further repository addresses to `ListPackages`, `FindPackages`,
+`FindPackage`, `ListSources`, and `FindSources`. The results are merged into a single list: sorting,
+`Latest`, and `Limit` apply to the merged result, and every package keeps the `RepoURL` and `RepoID`
+of the repository it came from.
+
+`WithSuite`, `WithComponent`, and `WithArchitecture` apply to every address. When the repositories
+use different suites (the Debian security archive is `bookworm-security`), give the suite in each
+address instead of using `WithSuite`:
+
+```go
+pkgs, err := debrepo.ListPackages(ctx,
+	"https://deb.debian.org/debian/dists/bookworm", "nginx",
+	debrepo.WithArchitecture("amd64"),
+	debrepo.WithRepositories("https://security.debian.org/debian-security/dists/bookworm-security"))
+```
+
+The address given to the call may be empty when `WithRepositories` supplies every address, repeated
+addresses are read once, and a repository that cannot be read fails the whole query. `Open` keeps
+reading a single repository and returns `ErrMultipleRepositories` when further addresses are
+configured.
 
 ### Returned metadata
 
@@ -301,9 +344,13 @@ repo, err := client.Open(ctx, "https://deb.debian.org/debian")
 ```bash
 go run ./cmd/rpmrepo packages https://download.docker.com/linux/centos/7/x86_64/stable docker-ce
 go run ./cmd/rpmrepo packages -arch x86_64 -latest -verify <repo-url> docker-ce
+go run ./cmd/rpmrepo packages <repo-url> <repo-url> nginx
 go run ./cmd/rpmrepo packages -json <repo-url> docker-ce | jq '.[0].format.requires'
 go run ./cmd/rpmrepo repomd <repo-url>
 ```
+
+Every argument before the package name is a repository URL; several are read together and their
+results are merged (see [Querying several repositories](#querying-several-repositories)).
 
 Sample output against a real repository:
 
@@ -319,10 +366,14 @@ docker-ce-3:26.1.4-1.el7.x86_64  27.3 MB  2024-06-05 11:31  79fad206a296…  htt
 go run ./cmd/debrepo packages -suite bookworm https://deb.debian.org/debian nginx
 go run ./cmd/debrepo packages -suite jammy -arch amd64 -latest -json http://archive.ubuntu.com/ubuntu bash
 go run ./cmd/debrepo packages -suite bookworm -component '*' https://deb.debian.org/debian docker-ce
+go run ./cmd/debrepo packages -arch amd64 https://deb.debian.org/debian/dists/bookworm https://security.debian.org/debian-security/dists/bookworm-security nginx
 go run ./cmd/debrepo sources  -suite bookworm https://deb.debian.org/debian nginx
 go run ./cmd/debrepo release  -suite bookworm https://deb.debian.org/debian
 go run ./cmd/debrepo indexes  -suite noble http://archive.ubuntu.com/ubuntu
 ```
+
+Every argument before the package name is a repository URL; several are read together and their
+results are merged (see [Querying several repositories](#querying-several-repositories-1)).
 
 Sample output against a real repository:
 

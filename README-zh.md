@@ -95,6 +95,7 @@ func main() {
 | `rpmrepo.FindPackages(ctx, repoURL, Query, opts...)` | 按 `Query` 条件查询 |
 | `rpmrepo.FindPackage(ctx, repoURL, name, opts...)` | 返回最新版本，找不到返回 `ErrPackageNotFound` |
 | `rpmrepo.Open(ctx, repoURL, opts...)` | 解析仓库元数据，返回 `*Repository`，可复用做多次查询 |
+| `rpmrepo.WithRepositories(urls...)` | 一次查询多个仓库并合并结果 |
 | `(*Repository).Scan(ctx, fn)` | 流式遍历全部软件包，内存占用与包数量无关 |
 | `(*Repository).Packages(ctx)` | 返回仓库全部软件包 |
 | `(*Repository).FindPackages(ctx, Query)` | 在已打开的仓库上查询 |
@@ -103,6 +104,22 @@ func main() {
 `Query` 支持：`Name`（通配符）、`Arch`（`src` 同时匹配 `nosrc`）、`Provides`（按能力查找）、
 `Epoch`/`Version`/`Release`（精确锁定）、`Latest`（每个 名称+架构 只保留最新）、
 `Limit`、`IgnoreCase`、`Sort`、`Filter`（自定义过滤函数）。
+
+### 一次查询多个仓库（rpmrepo）
+
+`WithRepositories` 可以为 `ListPackages`、`FindPackages`、`FindPackage` 追加更多仓库地址：
+所有地址使用相同设置独立读取，结果合并为一个列表，因此排序、`Latest`、`Limit` 作用于合并后的
+结果，每个包仍保留来源仓库的 `RepoURL` 与 `RepoID`。
+
+```go
+pkgs, err := rpmrepo.ListPackages(ctx,
+	"https://repo.almalinux.org/almalinux/9/BaseOS/x86_64/os", "nginx",
+	rpmrepo.WithRepositories("https://repo.almalinux.org/almalinux/9/AppStream/x86_64/os"))
+```
+
+调用参数中的地址可以为空（由 `WithRepositories` 提供全部地址）；重复的地址只读取一次；任一仓库
+读取失败都会让整次查询失败。`Open` 依旧只读取单个仓库，配置了更多地址时返回
+`ErrMultipleRepositories`。
 
 ### 返回的元数据
 
@@ -231,6 +248,7 @@ func main() {
 | `debrepo.ListSources(ctx, repoURL, name, opts...)` | 从 `Sources` 索引按名称列出源码包 |
 | `debrepo.FindSources(ctx, repoURL, SourceQuery, opts...)` | 按 `SourceQuery` 条件查询源码包 |
 | `debrepo.Open(ctx, repoURL, opts...)` | 解析 `Release`/`InRelease`，返回可复用的 `*Repository` |
+| `debrepo.WithRepositories(urls...)` | 一次查询多个仓库并合并结果 |
 | `(*Repository).Indexes()` / `SourceIndexes()` | 实际发现的索引文件（组件、架构、压缩格式、大小、校验值） |
 | `(*Repository).Scan(ctx, fn)` / `ScanSources(ctx, fn)` | 流式遍历全部软件包，内存占用与包数量无关 |
 | `(*Repository).Packages(ctx)` / `Sources(ctx)` | 返回仓库全部二进制包 / 源码包 |
@@ -247,6 +265,26 @@ func main() {
 `Query` 支持：`Name`（通配符）、`Arch`、`Component`、`Version`（精确匹配）、`Provides`
 （按虚拟包查找）、`Section`、`Priority`、`Essential`、`Latest`（每个 名称+架构+组件 只保留最新）、
 `Limit`、`IgnoreCase`、`Sort`、`Filter`；源码包使用对应的 `SourceQuery`。
+
+### 一次查询多个仓库（debrepo）
+
+`WithRepositories` 可以为 `ListPackages`、`FindPackages`、`FindPackage`、`ListSources`、
+`FindSources` 追加更多仓库地址：所有地址独立读取，结果合并为一个列表，排序、`Latest`、`Limit`
+作用于合并后的结果，每个包仍保留来源仓库的 `RepoURL` 与 `RepoID`。
+
+`WithSuite`、`WithComponent`、`WithArchitecture` 会作用于每一个地址。当各仓库的 suite 不同时
+（例如 Debian 安全仓库是 `bookworm-security`），请把 suite 写在地址里，而不要使用 `WithSuite`：
+
+```go
+pkgs, err := debrepo.ListPackages(ctx,
+	"https://deb.debian.org/debian/dists/bookworm", "nginx",
+	debrepo.WithArchitecture("amd64"),
+	debrepo.WithRepositories("https://security.debian.org/debian-security/dists/bookworm-security"))
+```
+
+调用参数中的地址可以为空（由 `WithRepositories` 提供全部地址）；重复的地址只读取一次；任一仓库
+读取失败都会让整次查询失败。`Open` 依旧只读取单个仓库，配置了更多地址时返回
+`ErrMultipleRepositories`。
 
 ### 返回的元数据
 
@@ -299,9 +337,13 @@ repo, err := client.Open(ctx, "https://deb.debian.org/debian")
 ```bash
 go run ./cmd/rpmrepo packages https://download.docker.com/linux/centos/7/x86_64/stable docker-ce
 go run ./cmd/rpmrepo packages -arch x86_64 -latest -verify <仓库地址> docker-ce
+go run ./cmd/rpmrepo packages <仓库地址> <仓库地址> nginx
 go run ./cmd/rpmrepo packages -json <仓库地址> docker-ce | jq '.[0].format.requires'
 go run ./cmd/rpmrepo repomd <仓库地址>
 ```
+
+包名之前的每个参数都是仓库地址；可以给出多个地址，结果会合并展示（见上方
+[一次查询多个仓库（rpmrepo）](#一次查询多个仓库rpmrepo)）。
 
 真实仓库输出示例：
 
@@ -317,10 +359,14 @@ docker-ce-3:26.1.4-1.el7.x86_64  27.3 MB  2024-06-05 11:31  79fad206a296…  htt
 go run ./cmd/debrepo packages -suite bookworm https://deb.debian.org/debian nginx
 go run ./cmd/debrepo packages -suite jammy -arch amd64 -latest -json http://archive.ubuntu.com/ubuntu bash
 go run ./cmd/debrepo packages -suite bookworm -component '*' https://deb.debian.org/debian docker-ce
+go run ./cmd/debrepo packages -arch amd64 https://deb.debian.org/debian/dists/bookworm https://security.debian.org/debian-security/dists/bookworm-security nginx
 go run ./cmd/debrepo sources  -suite bookworm https://deb.debian.org/debian nginx
 go run ./cmd/debrepo release  -suite bookworm https://deb.debian.org/debian
 go run ./cmd/debrepo indexes  -suite noble http://archive.ubuntu.com/ubuntu
 ```
+
+包名之前的每个参数都是仓库地址；可以给出多个地址，结果会合并展示（见上方
+[一次查询多个仓库（debrepo）](#一次查询多个仓库debrepo)）。
 
 真实仓库输出示例：
 

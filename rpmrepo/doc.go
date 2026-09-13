@@ -21,4 +21,7 @@
 //
 // Repository addresses support the http, https, and file schemes, or a local directory path
 // (such as ./testdata/repo).
+//
+// Several repositories can be queried at once: WithRepositories adds further addresses and the
+// results are merged into a single list (Latest, Sort, and Limit apply to the merged list).
 package rpmrepo

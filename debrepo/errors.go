@@ -14,6 +14,15 @@ var (
 	// The suite can be a suite name (stable, testing) or a codename (bookworm, jammy).
 	ErrSuiteRequired = errors.New("debrepo: no distribution suite specified, use debrepo.WithSuite (for example bookworm, jammy, stable)")
 
+	// ErrNoRepository indicates that no repository address was given: the address is empty and no
+	// address is configured with WithRepositories.
+	ErrNoRepository = errors.New("debrepo: repository address must not be empty")
+
+	// ErrMultipleRepositories indicates that a single-repository function (Open) was called while
+	// further repository addresses are configured with WithRepositories; use ListPackages,
+	// FindPackages, ListSources, or FindSources to query several repositories.
+	ErrMultipleRepositories = errors.New("debrepo: Open reads a single repository, but several repository addresses are configured")
+
 	// ErrIndexNotFound indicates that no usable Packages or Sources index was found in the repository.
 	ErrIndexNotFound = errors.New("debrepo: no Packages/Sources index found in the repository")
 

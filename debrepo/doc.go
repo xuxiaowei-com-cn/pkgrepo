@@ -25,4 +25,9 @@
 // Repository addresses support the http, https, and file schemes, or a local directory path; an
 // address can point at the repository root, dists/<suite>, a component directory, or even a specific
 // Packages/Sources file.
+//
+// Several repositories can be queried at once: WithRepositories adds further addresses (each one read
+// with the same suite, component, and architecture settings) and the results are merged into a single
+// list, where Latest, Sort, and Limit apply to the merged list. When the repositories use different
+// suites, give the suite in the address instead of using WithSuite.
 package debrepo

@@ -2,7 +2,6 @@ package debrepo
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"net/url"
@@ -98,7 +97,20 @@ type Repository struct {
 // (.../dists/bookworm), a component/architecture directory
 // (.../dists/bookworm/main/binary-amd64), a specific index address
 // (.../main/binary-amd64/Packages.gz), or a local directory.
+//
+// Open reads a single repository; when further addresses are configured with WithRepositories it
+// returns ErrMultipleRepositories, because a *Repository describes one repository. Use
+// ListPackages, FindPackages, ListSources, or FindSources to query several repositories at once.
 func (c *Client) Open(ctx context.Context, repoURL string) (*Repository, error) {
+	if len(c.repositories) > 0 {
+		return nil, ErrMultipleRepositories
+	}
+	return c.open(ctx, repoURL)
+}
+
+// open reads and parses a single repository; it is the implementation shared by Open and the
+// multi-repository queries, which must not go through the single-repository guard of Open.
+func (c *Client) open(ctx context.Context, repoURL string) (*Repository, error) {
 	location, err := parseRepoURL(repoURL)
 	if err != nil {
 		return nil, err
@@ -750,7 +762,7 @@ type repoLocation struct {
 func parseRepoURL(rawURL string) (*repoLocation, error) {
 	rawURL = strings.TrimSpace(rawURL)
 	if rawURL == "" {
-		return nil, errors.New("debrepo: repository address must not be empty")
+		return nil, ErrNoRepository
 	}
 	if !strings.Contains(rawURL, "://") {
 		absolute, err := filepath.Abs(rawURL)
