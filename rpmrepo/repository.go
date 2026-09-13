@@ -75,8 +75,8 @@ func (r *Repository) PrimaryURL() (string, error) {
 // Scan streams over every package in the repository, calling fn once per package (constant memory
 // usage).
 //
-// The returned Package has DownloadURL, RepoURL, and RepoID populated.
-func (r *Repository) Scan(ctx context.Context, fn func(*Package) error) error {
+// The returned RpmPackage has DownloadURL, RepoURL, and RepoID populated.
+func (r *Repository) Scan(ctx context.Context, fn func(*RpmPackage) error) error {
 	if fn == nil {
 		return nil
 	}
@@ -85,7 +85,7 @@ func (r *Repository) Scan(ctx context.Context, fn func(*Package) error) error {
 		return err
 	}
 	defer body.Close()
-	return ParsePrimary(body, func(pkg *Package) error {
+	return ParsePrimary(body, func(pkg *RpmPackage) error {
 		pkg.RepoID = r.ID
 		pkg.RepoURL = r.BaseURL.String()
 		downloadURL, err := resolveLocation(r.BaseURL, pkg.Location)
@@ -99,14 +99,14 @@ func (r *Repository) Scan(ctx context.Context, fn func(*Package) error) error {
 
 // Packages returns every package in the repository (note that large repositories consume a lot of
 // memory).
-func (r *Repository) Packages(ctx context.Context) ([]Package, error) {
+func (r *Repository) Packages(ctx context.Context) ([]RpmPackage, error) {
 	return r.FindPackages(ctx, Query{})
 }
 
 // FindPackages returns all packages matching q.
-func (r *Repository) FindPackages(ctx context.Context, q Query) ([]Package, error) {
-	pkgs := make([]Package, 0, 16)
-	err := r.Scan(ctx, func(pkg *Package) error {
+func (r *Repository) FindPackages(ctx context.Context, q Query) ([]RpmPackage, error) {
+	pkgs := make([]RpmPackage, 0, 16)
+	err := r.Scan(ctx, func(pkg *RpmPackage) error {
 		if q.Match(pkg) {
 			pkgs = append(pkgs, *pkg)
 		}
@@ -126,7 +126,7 @@ func (r *Repository) FindPackages(ctx context.Context, q Query) ([]Package, erro
 }
 
 // FindPackage returns the newest matching package, or ErrPackageNotFound when there is none.
-func (r *Repository) FindPackage(ctx context.Context, q Query) (*Package, error) {
+func (r *Repository) FindPackage(ctx context.Context, q Query) (*RpmPackage, error) {
 	q.Latest = true
 	q.Limit = 1
 	pkgs, err := r.FindPackages(ctx, q)

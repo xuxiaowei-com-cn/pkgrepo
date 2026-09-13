@@ -2,9 +2,9 @@ package rpmrepo
 
 import "testing"
 
-func testPackages() []Package {
-	build := func(name, arch, epoch, version, release string, buildTime int64) Package {
-		return Package{
+func testPackages() []RpmPackage {
+	build := func(name, arch, epoch, version, release string, buildTime int64) RpmPackage {
+		return RpmPackage{
 			Type:    "rpm",
 			Name:    name,
 			Arch:    arch,
@@ -19,7 +19,7 @@ func testPackages() []Package {
 			},
 		}
 	}
-	return []Package{
+	return []RpmPackage{
 		build("docker-ce", "x86_64", "3", "24.0.7", "1.el7", 1700000000),
 		build("docker-ce", "x86_64", "3", "24.0.6", "1.el7", 1690000000),
 		build("docker-ce", "aarch64", "3", "24.0.7", "1.el7", 1700000500),
@@ -81,7 +81,7 @@ func TestQueryMatchVersionAndProvides(t *testing.T) {
 		{Query{Name: "docker-ce", Epoch: "1"}, 0},
 		{Query{Provides: "docker-ce"}, 4},
 		{Query{Provides: "libc.so.6()(64bit)"}, 0},
-		{Query{Filter: func(p *Package) bool { return p.Arch == "noarch" }}, 1},
+		{Query{Filter: func(p *RpmPackage) bool { return p.Arch == "noarch" }}, 1},
 	}
 	for _, tc := range cases {
 		if got := countMatches(pkgs, tc.query); got != tc.want {
@@ -93,7 +93,7 @@ func TestQueryMatchVersionAndProvides(t *testing.T) {
 func TestQuerySort(t *testing.T) {
 	pkgs := testPackages()
 
-	nevrAs := func(pkgs []Package) []string {
+	nevrAs := func(pkgs []RpmPackage) []string {
 		out := make([]string, 0, len(pkgs))
 		for i := range pkgs {
 			out = append(out, pkgs[i].NEVRA())
@@ -113,7 +113,7 @@ func TestQuerySort(t *testing.T) {
 	}
 
 	t.Run("default sort", func(t *testing.T) {
-		sorted := append([]Package(nil), pkgs...)
+		sorted := append([]RpmPackage(nil), pkgs...)
 		Query{}.sort(sorted)
 		assertOrder(t, "SortDefault", nevrAs(sorted), []string{
 			"Docker-CLI-24.0.7-1.el7.noarch",
@@ -125,7 +125,7 @@ func TestQuerySort(t *testing.T) {
 	})
 
 	t.Run("version ascending", func(t *testing.T) {
-		sorted := append([]Package(nil), pkgs...)
+		sorted := append([]RpmPackage(nil), pkgs...)
 		Query{Sort: SortVersionAsc}.sort(sorted)
 		assertOrder(t, "SortVersionAsc", nevrAs(sorted), []string{
 			"Docker-CLI-24.0.7-1.el7.noarch",
@@ -137,7 +137,7 @@ func TestQuerySort(t *testing.T) {
 	})
 
 	t.Run("build time descending", func(t *testing.T) {
-		sorted := append([]Package(nil), pkgs...)
+		sorted := append([]RpmPackage(nil), pkgs...)
 		Query{Sort: SortBuildTimeDesc}.sort(sorted)
 		assertOrder(t, "SortBuildTimeDesc", nevrAs(sorted), []string{
 			"Docker-CLI-24.0.7-1.el7.noarch",
@@ -149,7 +149,7 @@ func TestQuerySort(t *testing.T) {
 	})
 
 	t.Run("keep original order", func(t *testing.T) {
-		sorted := append([]Package(nil), pkgs...)
+		sorted := append([]RpmPackage(nil), pkgs...)
 		Query{Sort: SortNone}.sort(sorted)
 		assertOrder(t, "SortNone", nevrAs(sorted), nevrAs(pkgs))
 	})
@@ -170,7 +170,7 @@ func TestRetainLatest(t *testing.T) {
 func TestFindPackagesLimit(t *testing.T) {
 	pkgs := testPackages()
 	query := Query{Name: "docker-ce", Limit: 2}
-	matched := make([]Package, 0, len(pkgs))
+	matched := make([]RpmPackage, 0, len(pkgs))
 	for i := range pkgs {
 		if query.Match(&pkgs[i]) {
 			matched = append(matched, pkgs[i])
@@ -185,7 +185,7 @@ func TestFindPackagesLimit(t *testing.T) {
 	}
 }
 
-func countMatches(pkgs []Package, query Query) int {
+func countMatches(pkgs []RpmPackage, query Query) int {
 	count := 0
 	for i := range pkgs {
 		if query.Match(&pkgs[i]) {

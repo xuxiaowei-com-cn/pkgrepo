@@ -464,8 +464,8 @@ func (r *Repository) FileURL(relativePath string) (string, error) {
 // Scan streams over every binary package in the repository, calling fn once per package (constant
 // memory usage).
 //
-// The returned Package has DownloadURL, RepoURL, RepoID, Suite, and Component populated.
-func (r *Repository) Scan(ctx context.Context, fn func(*Package) error) error {
+// The returned DebPackage has DownloadURL, RepoURL, RepoID, Suite, and Component populated.
+func (r *Repository) Scan(ctx context.Context, fn func(*DebPackage) error) error {
 	if fn == nil {
 		return nil
 	}
@@ -480,13 +480,13 @@ func (r *Repository) Scan(ctx context.Context, fn func(*Package) error) error {
 	return nil
 }
 
-func (r *Repository) scanBinaryIndex(ctx context.Context, index Index, fn func(*Package) error) error {
+func (r *Repository) scanBinaryIndex(ctx context.Context, index Index, fn func(*DebPackage) error) error {
 	body, err := r.openIndex(ctx, index)
 	if err != nil {
 		return err
 	}
 	defer body.Close()
-	return ParsePackages(body, func(pkg *Package) error {
+	return ParsePackages(body, func(pkg *DebPackage) error {
 		pkg.Suite = r.Suite
 		pkg.Component = index.Component
 		pkg.RepoID = r.ID
@@ -533,14 +533,14 @@ func (r *Repository) scanSourceIndex(ctx context.Context, index Index, fn func(*
 
 // Packages returns every binary package in the repository (note that large repositories consume a
 // lot of memory).
-func (r *Repository) Packages(ctx context.Context) ([]Package, error) {
+func (r *Repository) Packages(ctx context.Context) ([]DebPackage, error) {
 	return r.FindPackages(ctx, Query{})
 }
 
 // FindPackages returns every binary package matching q.
-func (r *Repository) FindPackages(ctx context.Context, q Query) ([]Package, error) {
-	pkgs := make([]Package, 0, 16)
-	err := r.Scan(ctx, func(pkg *Package) error {
+func (r *Repository) FindPackages(ctx context.Context, q Query) ([]DebPackage, error) {
+	pkgs := make([]DebPackage, 0, 16)
+	err := r.Scan(ctx, func(pkg *DebPackage) error {
 		if q.Match(pkg) {
 			pkgs = append(pkgs, *pkg)
 		}
@@ -560,7 +560,7 @@ func (r *Repository) FindPackages(ctx context.Context, q Query) ([]Package, erro
 }
 
 // FindPackage returns the newest matching package, or ErrPackageNotFound when there is none.
-func (r *Repository) FindPackage(ctx context.Context, q Query) (*Package, error) {
+func (r *Repository) FindPackage(ctx context.Context, q Query) (*DebPackage, error) {
 	q.Latest = true
 	q.Limit = 1
 	pkgs, err := r.FindPackages(ctx, q)

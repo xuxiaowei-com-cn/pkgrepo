@@ -11,7 +11,7 @@ import (
 // An error returned by fn stops parsing and is returned unchanged, which makes it easy to exit the
 // iteration early. Because parsing is streaming, memory usage stays constant even for repositories
 // with hundreds of thousands of packages.
-func ParsePrimary(r io.Reader, fn func(*Package) error) error {
+func ParsePrimary(r io.Reader, fn func(*RpmPackage) error) error {
 	if fn == nil {
 		return nil
 	}
@@ -29,7 +29,7 @@ func ParsePrimary(r io.Reader, fn func(*Package) error) error {
 		if !ok || start.Name.Local != "package" {
 			continue
 		}
-		var pkg Package
+		var pkg RpmPackage
 		if err := dec.DecodeElement(&pkg, &start); err != nil {
 			return fmt.Errorf("rpmrepo: parsing a package in primary.xml failed: %w", err)
 		}

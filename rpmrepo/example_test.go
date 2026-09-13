@@ -57,7 +57,7 @@ func ExampleOpen() {
 
 	// Stream over the packages; memory usage does not depend on the number of packages.
 	count := 0
-	if err := repo.Scan(ctx, func(pkg *rpmrepo.Package) error {
+	if err := repo.Scan(ctx, func(pkg *rpmrepo.RpmPackage) error {
 		count++
 		return nil
 	}); err != nil {

@@ -90,12 +90,12 @@ func (c *Client) fetcherInstance() Fetcher {
 
 // ListPackages reads the repository at repoURL and returns all packages whose name matches name.
 // name supports wildcards, for example "nginx*".
-func (c *Client) ListPackages(ctx context.Context, repoURL, name string) ([]Package, error) {
+func (c *Client) ListPackages(ctx context.Context, repoURL, name string) ([]RpmPackage, error) {
 	return c.FindPackages(ctx, repoURL, Query{Name: name})
 }
 
 // FindPackages reads the repository at repoURL and returns all packages matching q.
-func (c *Client) FindPackages(ctx context.Context, repoURL string, q Query) ([]Package, error) {
+func (c *Client) FindPackages(ctx context.Context, repoURL string, q Query) ([]RpmPackage, error) {
 	repo, err := c.Open(ctx, repoURL)
 	if err != nil {
 		return nil, err
@@ -114,18 +114,18 @@ func Open(ctx context.Context, repoURL string, opts ...Option) (*Repository, err
 // including metadata such as the download link, size, checksum, and dependencies.
 //
 //	pkgs, err := rpmrepo.ListPackages(ctx, "https://download.docker.com/linux/centos/7/x86_64/stable", "docker-ce")
-func ListPackages(ctx context.Context, repoURL, name string, opts ...Option) ([]Package, error) {
+func ListPackages(ctx context.Context, repoURL, name string, opts ...Option) ([]RpmPackage, error) {
 	return New(opts...).ListPackages(ctx, repoURL, name)
 }
 
 // FindPackages reads the repository at repoURL and returns the packages matching q.
-func FindPackages(ctx context.Context, repoURL string, q Query, opts ...Option) ([]Package, error) {
+func FindPackages(ctx context.Context, repoURL string, q Query, opts ...Option) ([]RpmPackage, error) {
 	return New(opts...).FindPackages(ctx, repoURL, q)
 }
 
 // FindPackage returns the newest matching package in the repository, or ErrPackageNotFound when
 // there is none.
-func FindPackage(ctx context.Context, repoURL, name string, opts ...Option) (*Package, error) {
+func FindPackage(ctx context.Context, repoURL, name string, opts ...Option) (*RpmPackage, error) {
 	pkgs, err := New(opts...).FindPackages(ctx, repoURL, Query{Name: name, Latest: true, Limit: 1})
 	if err != nil {
 		return nil, err

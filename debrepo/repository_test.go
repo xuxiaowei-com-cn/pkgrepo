@@ -570,7 +570,7 @@ func TestScanErrorPropagation(t *testing.T) {
 	repo := openRepo(t, testRepository(t), WithSuite("bookworm"), WithArchitecture("amd64"))
 	sentinel := errors.New("stop scanning")
 	count := 0
-	err := repo.Scan(ctx, func(*Package) error {
+	err := repo.Scan(ctx, func(*DebPackage) error {
 		count++
 		return sentinel
 	})
@@ -582,7 +582,7 @@ func TestScanErrorPropagation(t *testing.T) {
 	}
 	// Every package (including those from binary-all) can be scanned.
 	total := 0
-	if err := repo.Scan(ctx, func(*Package) error { total++; return nil }); err != nil {
+	if err := repo.Scan(ctx, func(*DebPackage) error { total++; return nil }); err != nil {
 		t.Fatalf("Scan failed: %v", err)
 	}
 	if total != 4 {
@@ -821,6 +821,6 @@ func TestFindPackagesLimitAndSort(t *testing.T) {
 		t.Errorf("the first package in name+version-ascending order = %q", pkgs[0].Name)
 	}
 	if pkgs[0].String() == "" {
-		t.Error("Package.String() should not be empty")
+		t.Error("DebPackage.String() should not be empty")
 	}
 }

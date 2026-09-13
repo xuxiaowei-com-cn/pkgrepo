@@ -74,10 +74,10 @@ func TestContainerd(t *testing.T) {
 }
 
 // containerdPackages lists every containerd.io package in the repository by name.
-func containerdPackages(t *testing.T, ctx context.Context, repo realRepo) []Package {
+func containerdPackages(t *testing.T, ctx context.Context, repo realRepo) []DebPackage {
 	t.Helper()
 	requireNetwork(t, repo.url)
-	pkgs, err := callWithRetry(t, repo.url, func() ([]Package, error) {
+	pkgs, err := callWithRetry(t, repo.url, func() ([]DebPackage, error) {
 		return ListPackages(ctx, repo.url, containerdPackage,
 			WithFetcher(newCachingFetcher(&HTTPFetcher{Client: realRepoClient(2 * time.Minute)})),
 			WithSuite(repo.suite),
@@ -96,7 +96,7 @@ func containerdPackages(t *testing.T, ctx context.Context, repo realRepo) []Pack
 }
 
 // findContainerd queries an already opened repository and fails immediately when there is no result.
-func findContainerd(t *testing.T, ctx context.Context, repository *Repository, q Query) []Package {
+func findContainerd(t *testing.T, ctx context.Context, repository *Repository, q Query) []DebPackage {
 	t.Helper()
 	pkgs, err := repository.FindPackages(ctx, q)
 	if err != nil {
@@ -109,7 +109,7 @@ func findContainerd(t *testing.T, ctx context.Context, repository *Repository, q
 }
 
 // findLatestContainerd returns the newest containerd.io package in the repository.
-func findLatestContainerd(t *testing.T, ctx context.Context, repository *Repository) *Package {
+func findLatestContainerd(t *testing.T, ctx context.Context, repository *Repository) *DebPackage {
 	t.Helper()
 	pkg, err := repository.FindPackage(ctx, Query{
 		Name:   containerdPackage,
@@ -124,7 +124,7 @@ func findLatestContainerd(t *testing.T, ctx context.Context, repository *Reposit
 
 // assertContainerdPackage checks that the deb package information returned by a real repository is
 // self-consistent.
-func assertContainerdPackage(t *testing.T, repo realRepo, pkg *Package) {
+func assertContainerdPackage(t *testing.T, repo realRepo, pkg *DebPackage) {
 	t.Helper()
 	if pkg.Name != containerdPackage || pkg.Architecture != repo.arch {
 		t.Fatalf("the query result contains another package: %s", pkg.ID())
@@ -166,7 +166,7 @@ func assertContainerdPackage(t *testing.T, repo realRepo, pkg *Package) {
 }
 
 // containsPackage reports whether the list contains a package with the given identifier.
-func containsPackage(pkgs []Package, id string) bool {
+func containsPackage(pkgs []DebPackage, id string) bool {
 	for i := range pkgs {
 		if pkgs[i].ID() == id {
 			return true

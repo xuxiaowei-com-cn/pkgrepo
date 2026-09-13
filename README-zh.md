@@ -91,7 +91,7 @@ func main() {
 
 | 函数 / 方法 | 说明 |
 | --- | --- |
-| `rpmrepo.ListPackages(ctx, repoURL, name, opts...)` | 按名称（支持通配符）列出软件包，返回 `[]Package` |
+| `rpmrepo.ListPackages(ctx, repoURL, name, opts...)` | 按名称（支持通配符）列出软件包，返回 `[]RpmPackage` |
 | `rpmrepo.FindPackages(ctx, repoURL, Query, opts...)` | 按 `Query` 条件查询 |
 | `rpmrepo.FindPackage(ctx, repoURL, name, opts...)` | 返回最新版本，找不到返回 `ErrPackageNotFound` |
 | `rpmrepo.Open(ctx, repoURL, opts...)` | 解析仓库元数据，返回 `*Repository`，可复用做多次查询 |
@@ -106,7 +106,7 @@ func main() {
 
 ### 返回的元数据
 
-`Package` 来自 primary.xml，主要字段：
+`RpmPackage` 来自 primary.xml，主要字段：
 
 | 字段 | 说明 |
 | --- | --- |
@@ -250,7 +250,7 @@ func main() {
 
 ### 返回的元数据
 
-`Package` 来自 `Packages` 索引，主要字段：
+`DebPackage` 来自 `Packages` 索引，主要字段：
 
 | 字段 | 说明 |
 | --- | --- |
@@ -261,7 +261,7 @@ func main() {
 | `Size{File,Installed}` | `.deb` 文件大小（字节）与安装后占用空间（KiB） |
 | `Description{Synopsis,Long}` | 摘要与完整描述（` .` 行会还原为空行） |
 | `Maintainer`、`OriginalMaintainer`、`Homepage`、`Section`、`Priority`、`Essential`、`MultiArch` | 描述信息 |
-| `Depends`、`PreDepends`、`Recommends`、`Suggests`、`Breaks`、`Conflicts`、`Provides`、`Replaces`、`Enhances`、`BuiltUsing` | 依赖关系（含替代方案与版本约束），可用 `Dependencies.Has`、`Package.DependsOn`、`Package.ProvidesPackage` 判断 |
+| `Depends`、`PreDepends`、`Recommends`、`Suggests`、`Breaks`、`Conflicts`、`Provides`、`Replaces`、`Enhances`、`BuiltUsing` | 依赖关系（含替代方案与版本约束），可用 `Dependencies.Has`、`DebPackage.DependsOn`、`DebPackage.ProvidesPackage` 判断 |
 | `Suite`、`Component`、`RepoURL`、`RepoID` | 包所属的仓库上下文 |
 | `Fields` | 段落中的全部原始字段（`Field(name)`），例如 `Tag`、`Task`、`Bugs`、`Package-Type` |
 

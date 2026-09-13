@@ -37,7 +37,7 @@ func TestParsePrimaryStopsOnError(t *testing.T) {
 </metadata>`
 	sentinel := errors.New("stop parsing")
 	count := 0
-	err := ParsePrimary(strings.NewReader(document), func(*Package) error {
+	err := ParsePrimary(strings.NewReader(document), func(*RpmPackage) error {
 		count++
 		return sentinel
 	})
@@ -50,7 +50,7 @@ func TestParsePrimaryStopsOnError(t *testing.T) {
 }
 
 func TestParsePrimaryInvalidXML(t *testing.T) {
-	if err := ParsePrimary(strings.NewReader("<metadata><package>"), func(*Package) error { return nil }); err == nil {
+	if err := ParsePrimary(strings.NewReader("<metadata><package>"), func(*RpmPackage) error { return nil }); err == nil {
 		t.Fatal("invalid XML should fail")
 	}
 }
@@ -66,8 +66,8 @@ func TestParsePrimaryLatin1(t *testing.T) {
 		"<summary>caf\xe9 summary</summary>" +
 		"</package></metadata>"
 
-	var pkg Package
-	err := ParsePrimary(strings.NewReader(document), func(p *Package) error {
+	var pkg RpmPackage
+	err := ParsePrimary(strings.NewReader(document), func(p *RpmPackage) error {
 		pkg = *p
 		return nil
 	})
@@ -92,7 +92,7 @@ func TestParsePrimaryUnsupportedCharset(t *testing.T) {
 }
 
 func TestPackageHelpers(t *testing.T) {
-	pkg := Package{
+	pkg := RpmPackage{
 		Type:     "rpm",
 		Name:     "nginx",
 		Arch:     "src",
@@ -125,11 +125,11 @@ func TestPackageHelpers(t *testing.T) {
 		t.Error("the dependency Epoch should be 0")
 	}
 
-	escaped := Package{Location: Location{Href: "Packages/nginx%20extras-1.0-1.noarch.rpm"}}
+	escaped := RpmPackage{Location: Location{Href: "Packages/nginx%20extras-1.0-1.noarch.rpm"}}
 	if got, want := escaped.Filename(), "nginx extras-1.0-1.noarch.rpm"; got != want {
 		t.Errorf("the escaped file name parsed as %q, want %q", got, want)
 	}
-	if (&Package{Arch: "nosrc"}).IsSource() == false {
+	if (&RpmPackage{Arch: "nosrc"}).IsSource() == false {
 		t.Error("the nosrc architecture is also a source package")
 	}
 }

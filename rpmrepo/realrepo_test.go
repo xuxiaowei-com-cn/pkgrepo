@@ -325,7 +325,7 @@ func openRealRepo(t *testing.T, repo realRepo) *Repository {
 }
 
 // findRealPackages queries packages against real metadata.
-func findRealPackages(t *testing.T, repository *Repository, query Query) []Package {
+func findRealPackages(t *testing.T, repository *Repository, query Query) []RpmPackage {
 	t.Helper()
 	pkgs, err := repository.FindPackages(context.Background(), query)
 	if err != nil {
@@ -460,8 +460,8 @@ func TestRealReposParsePrimaryStream(t *testing.T) {
 			}
 
 			count, dependencies := 0, 0
-			var sample Package
-			err = ParsePrimary(reader, func(pkg *Package) error {
+			var sample RpmPackage
+			err = ParsePrimary(reader, func(pkg *RpmPackage) error {
 				count++
 				if count == 1 {
 					sample = *pkg

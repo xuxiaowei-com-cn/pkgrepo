@@ -202,9 +202,9 @@ type Format struct {
 	Enhances    []Dependency `xml:"enhances>entry" json:"enhances,omitempty"`
 }
 
-// Package is the metadata of a single package, corresponding to one <package> element in
+// RpmPackage is the metadata of a single package, corresponding to one <package> element in
 // primary.xml.
-type Package struct {
+type RpmPackage struct {
 	// Type is usually rpm.
 	Type string `xml:"type,attr" json:"type"`
 	// Name is the package name.
@@ -242,12 +242,12 @@ type Package struct {
 }
 
 // NEVRA returns the unique identifier of the package: name-epoch:version-release.arch.
-func (p *Package) NEVRA() string {
+func (p *RpmPackage) NEVRA() string {
 	return p.Name + "-" + p.Version.String() + "." + p.Arch
 }
 
 // Filename returns the name of the package file, for example nginx-1.24.0-1.el9.x86_64.rpm.
-func (p *Package) Filename() string {
+func (p *RpmPackage) Filename() string {
 	base := p.Location.Href
 	if idx := strings.LastIndexByte(base, '/'); idx >= 0 {
 		base = base[idx+1:]
@@ -259,13 +259,13 @@ func (p *Package) Filename() string {
 }
 
 // IsSource reports whether the package is a source package.
-func (p *Package) IsSource() bool { return p.Arch == "src" || p.Arch == "nosrc" }
+func (p *RpmPackage) IsSource() bool { return p.Arch == "src" || p.Arch == "nosrc" }
 
 // Provides reports whether the package provides the given capability.
-func (p *Package) Provides(name string) bool { return hasDependency(p.Format.Provides, name) }
+func (p *RpmPackage) Provides(name string) bool { return hasDependency(p.Format.Provides, name) }
 
 // Requires reports whether the package requires the given capability.
-func (p *Package) Requires(name string) bool { return hasDependency(p.Format.Requires, name) }
+func (p *RpmPackage) Requires(name string) bool { return hasDependency(p.Format.Requires, name) }
 
 func hasDependency(deps []Dependency, name string) bool {
 	for _, dep := range deps {
@@ -277,4 +277,4 @@ func hasDependency(deps []Dependency, name string) bool {
 }
 
 // String returns the NEVRA of the package.
-func (p *Package) String() string { return p.NEVRA() }
+func (p *RpmPackage) String() string { return p.NEVRA() }

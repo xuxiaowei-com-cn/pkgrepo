@@ -152,7 +152,7 @@ func TestPackageDependencies(t *testing.T) {
 func TestParsePackagesStreaming(t *testing.T) {
 	data := packageSample + "\n" + strings.ReplaceAll(packageSample, "nginx", "nginx-doc") + "\n"
 	var names []string
-	err := ParsePackages(strings.NewReader(data), func(pkg *Package) error {
+	err := ParsePackages(strings.NewReader(data), func(pkg *DebPackage) error {
 		names = append(names, pkg.Name)
 		return nil
 	})
@@ -166,7 +166,7 @@ func TestParsePackagesStreaming(t *testing.T) {
 	// An error returned by fn should stop parsing and be returned unchanged.
 	sentinel := errors.New("stop parsing")
 	count := 0
-	err = ParsePackages(strings.NewReader(data), func(*Package) error {
+	err = ParsePackages(strings.NewReader(data), func(*DebPackage) error {
 		count++
 		return sentinel
 	})

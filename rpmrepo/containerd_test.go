@@ -71,10 +71,10 @@ func TestContainerd(t *testing.T) {
 }
 
 // containerdPackages lists every containerd.io package in the repository by name.
-func containerdPackages(t *testing.T, ctx context.Context, repo realRepo) []Package {
+func containerdPackages(t *testing.T, ctx context.Context, repo realRepo) []RpmPackage {
 	t.Helper()
 	requireNetwork(t, repo.url)
-	pkgs, err := callWithRetry(t, repo.url, func() ([]Package, error) {
+	pkgs, err := callWithRetry(t, repo.url, func() ([]RpmPackage, error) {
 		return ListPackages(ctx, repo.url, containerdPackage, WithHTTPClient(realRepoHTTPClient(2*time.Minute)))
 	})
 	if err != nil {
@@ -99,7 +99,7 @@ func containerdRepository(t *testing.T, ctx context.Context, repo realRepo) *Rep
 }
 
 // findContainerd queries an already opened repository and fails immediately when there is no result.
-func findContainerd(t *testing.T, ctx context.Context, repository *Repository, q Query) []Package {
+func findContainerd(t *testing.T, ctx context.Context, repository *Repository, q Query) []RpmPackage {
 	t.Helper()
 	pkgs, err := repository.FindPackages(ctx, q)
 	if err != nil {
@@ -112,7 +112,7 @@ func findContainerd(t *testing.T, ctx context.Context, repository *Repository, q
 }
 
 // findLatestContainerd returns the newest containerd.io package in the repository.
-func findLatestContainerd(t *testing.T, ctx context.Context, repository *Repository) *Package {
+func findLatestContainerd(t *testing.T, ctx context.Context, repository *Repository) *RpmPackage {
 	t.Helper()
 	pkg, err := repository.FindPackage(ctx, Query{
 		Name:   containerdPackage,
@@ -127,7 +127,7 @@ func findLatestContainerd(t *testing.T, ctx context.Context, repository *Reposit
 
 // assertContainerdPackage checks that the package information returned by a real repository is
 // self-consistent.
-func assertContainerdPackage(t *testing.T, repo realRepo, pkg *Package) {
+func assertContainerdPackage(t *testing.T, repo realRepo, pkg *RpmPackage) {
 	t.Helper()
 	distro := strings.TrimPrefix(repo.name, "centos")
 
@@ -162,7 +162,7 @@ func assertContainerdPackage(t *testing.T, repo realRepo, pkg *Package) {
 }
 
 // containsPackage reports whether the list contains a package with the given NEVRA.
-func containsPackage(pkgs []Package, nevra string) bool {
+func containsPackage(pkgs []RpmPackage, nevra string) bool {
 	for i := range pkgs {
 		if pkgs[i].NEVRA() == nevra {
 			return true

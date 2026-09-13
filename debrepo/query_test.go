@@ -5,9 +5,9 @@ import (
 	"testing"
 )
 
-func testPackages() []Package {
-	makePackage := func(name, version, arch, component string) Package {
-		pkg := Package{
+func testPackages() []DebPackage {
+	makePackage := func(name, version, arch, component string) DebPackage {
+		pkg := DebPackage{
 			Name:         name,
 			Version:      MustParseVersion(version),
 			Architecture: arch,
@@ -17,7 +17,7 @@ func testPackages() []Package {
 		pkg.Size.File = int64(len(version) * 1000)
 		return pkg
 	}
-	return []Package{
+	return []DebPackage{
 		makePackage("nginx", "1.22.1-9", "amd64", "main"),
 		makePackage("nginx", "1.24.0-1", "amd64", "main"),
 		makePackage("nginx", "1.24.0-1", "arm64", "main"),
@@ -46,7 +46,7 @@ func TestQueryMatch(t *testing.T) {
 		{Query{Name: "nginx", Version: "1.22.1"}, nil},
 	}
 	for _, tc := range cases {
-		var matched []Package
+		var matched []DebPackage
 		for i := range pkgs {
 			if tc.query.Match(&pkgs[i]) {
 				matched = append(matched, pkgs[i])
@@ -59,14 +59,14 @@ func TestQueryMatch(t *testing.T) {
 }
 
 func TestQueryProvidesAndEssential(t *testing.T) {
-	nginx := Package{
+	nginx := DebPackage{
 		Name:    "nginx",
 		Version: MustParseVersion("1.24.0-1"),
 		Provides: Dependencies{
 			{Alternatives: []Constraint{{Name: "httpd"}, {Name: "httpd-cgi"}}},
 		},
 	}
-	essential := Package{Name: "bash", Version: MustParseVersion("5.2.15-2"), Essential: true}
+	essential := DebPackage{Name: "bash", Version: MustParseVersion("5.2.15-2"), Essential: true}
 	if !(Query{Provides: "httpd"}).Match(&nginx) {
 		t.Error("the Provides lookup should match httpd")
 	}
@@ -131,8 +131,8 @@ func TestQuerySortAndLatest(t *testing.T) {
 }
 
 func TestQueryFilter(t *testing.T) {
-	pkg := Package{Name: "nginx", Version: MustParseVersion("1.24.0-1")}
-	query := Query{Name: "nginx", Filter: func(p *Package) bool { return p.Name != "nginx" }}
+	pkg := DebPackage{Name: "nginx", Version: MustParseVersion("1.24.0-1")}
+	query := Query{Name: "nginx", Filter: func(p *DebPackage) bool { return p.Name != "nginx" }}
 	if query.Match(&pkg) {
 		t.Error("nothing should match when Filter returns false")
 	}
