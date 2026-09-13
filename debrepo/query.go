@@ -32,9 +32,10 @@ const (
 type Query struct {
 	// Name is the package name; it supports shell wildcards (*, ?, [abc]), for example "nginx*".
 	Name string
-	// Arch is the architecture, for example amd64, arm64, or all; "any" or an empty value means no
-	// architecture restriction.
-	Arch string
+	// Arch lists the architectures to match, for example []string{"amd64", "arm64"}; it also supports
+	// shell wildcards, for example "arm*". The value "any" (or an empty value) means no architecture
+	// restriction. Several values are combined with OR, and an empty list matches every architecture.
+	Arch []string
 	// Component restricts the component (main, contrib, universe, ...); it also supports wildcards.
 	Component string
 	// Provides looks up packages by virtual package (Provides), for example "mail-transport-agent".
@@ -102,10 +103,15 @@ func (q Query) matchField(got, want string) bool {
 }
 
 func (q Query) matchArch(arch string) bool {
-	if q.Arch == "" || q.Arch == "any" {
+	if len(q.Arch) == 0 {
 		return true
 	}
-	return q.matchField(arch, q.Arch)
+	for _, want := range q.Arch {
+		if want == "" || want == "any" || q.matchField(arch, want) {
+			return true
+		}
+	}
+	return false
 }
 
 func (q Query) matchVersion(got, want string) bool {

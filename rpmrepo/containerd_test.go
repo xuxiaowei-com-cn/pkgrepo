@@ -49,7 +49,7 @@ func TestContainerd(t *testing.T) {
 			// the newest by descending version.
 			x86 := findContainerd(t, ctx, repository, Query{
 				Name: containerdPackage,
-				Arch: "x86_64",
+				Arch: []string{"x86_64"},
 			})
 			t.Logf("newest x86_64 package: %s", x86[0].DownloadURL)
 			if x86[0].NEVRA() != latest.NEVRA() {
@@ -116,7 +116,7 @@ func findLatestContainerd(t *testing.T, ctx context.Context, repository *Reposit
 	t.Helper()
 	pkg, err := repository.FindPackage(ctx, Query{
 		Name:   containerdPackage,
-		Arch:   "x86_64",
+		Arch:   []string{"x86_64"},
 		Latest: true,
 	})
 	if err != nil {

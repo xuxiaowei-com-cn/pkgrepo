@@ -32,9 +32,11 @@ const (
 type Query struct {
 	// Name is the package name; it supports shell wildcards (*, ?, [abc]), for example "nginx*".
 	Name string
-	// Arch is the architecture, for example x86_64, noarch, or src; it also supports wildcards.
-	// Passing "src" also matches "nosrc".
-	Arch string
+	// Arch lists the architectures to match, for example []string{"x86_64", "noarch"}; it also
+	// supports shell wildcards, for example "aarch*". The value "src" additionally matches the
+	// "nosrc" architecture used by source packages. Several values are combined with OR, and an empty
+	// list (or an empty value) matches every architecture.
+	Arch []string
 	// Provides looks up packages by capability (Provides), for example "webserver" or "docker-ce".
 	Provides string
 	// Epoch, Version, and Release pin an exact version; leaving them empty means no restriction.
@@ -92,22 +94,32 @@ func (q Query) matchName(name string) bool {
 }
 
 func (q Query) matchArch(arch string) bool {
-	if q.Arch == "" {
+	if len(q.Arch) == 0 {
 		return true
 	}
-	want, got := q.Arch, arch
+	for _, want := range q.Arch {
+		if q.matchOneArch(arch, want) {
+			return true
+		}
+	}
+	return false
+}
+
+// matchOneArch reports whether arch matches one entry of Query.Arch.
+func (q Query) matchOneArch(arch, want string) bool {
+	if want == "" {
+		return true
+	}
+	got := arch
 	if q.IgnoreCase {
 		want, got = strings.ToLower(want), strings.ToLower(got)
 	}
-	if want == got {
-		return true
-	}
-	if hasGlobMeta(want) {
+	if want != got && hasGlobMeta(want) {
 		ok, err := path.Match(want, got)
 		return err == nil && ok
 	}
 	// "src" also matches the "nosrc" architecture used by source packages.
-	return want == "src" && got == "nosrc"
+	return want == got || (want == "src" && got == "nosrc")
 }
 
 func (q Query) matchDependency(deps []Dependency, name string) bool {

@@ -37,7 +37,7 @@ func ExampleListPackages() {
 	// Use Query when finer-grained conditions are needed.
 	amd64, err := rpmrepo.FindPackages(ctx, repoURL, rpmrepo.Query{
 		Name:   "docker-ce",
-		Arch:   "x86_64",
+		Arch:   []string{"x86_64"},
 		Latest: true,
 	})
 	if err != nil {

@@ -79,7 +79,7 @@ func main() {
 	// 3. Narrower conditions: architecture, version, capability (Provides), custom filters.
 	x86, err := rpmrepo.FindPackages(ctx, repoURL, rpmrepo.Query{
 		Name:   "docker-ce",
-		Arch:   "x86_64",
+		Arch:   []string{"x86_64"},
 		Latest: true,
 	})
 	if err != nil {
@@ -103,9 +103,10 @@ func main() {
 | `(*Repository).FindPackages(ctx, Query)` | Queries an already-opened repository |
 | `rpmrepo.CompareVersions(a, b)` | RPM version comparison (rpmvercmp), consistent with rpm/dnf |
 
-`Query` supports `Name` (wildcards), `Arch` (`src` also matches `nosrc`), `Provides` (lookup by
-capability), `Epoch`/`Version`/`Release` (exact pinning), `Latest` (keep only the newest per
-name+arch), `Limit`, `IgnoreCase`, `Sort` and `Filter` (custom predicate).
+`Query` supports `Name` (wildcards), `Arch` (a list of architectures, wildcards supported; `src`
+also matches `nosrc`), `Provides` (lookup by capability), `Epoch`/`Version`/`Release` (exact
+pinning), `Latest` (keep only the newest per name+arch), `Limit`, `IgnoreCase`, `Sort` and `Filter`
+(custom predicate).
 
 ### Querying several repositories
 
@@ -266,9 +267,10 @@ Repository selection is done with options: `WithSuite("bookworm")`, `WithCompone
 index is scanned as well), plus `WithTimeout`, `WithHTTPClient`, `WithUserAgent`, `WithFetcher`,
 `WithChecksumVerification` and `WithByHashFirst`.
 
-`Query` supports `Name` (wildcards), `Arch`, `Component`, `Version` (exact), `Provides`,
-`Section`, `Priority`, `Essential`, `Latest` (newest per name+architecture+component), `Limit`,
-`IgnoreCase`, `Sort` and `Filter`. `SourceQuery` is the source-package equivalent.
+`Query` supports `Name` (wildcards), `Arch` (a list of architectures, wildcards supported; `any`
+means no restriction), `Component`, `Version` (exact), `Provides`, `Section`, `Priority`,
+`Essential`, `Latest` (newest per name+architecture+component), `Limit`, `IgnoreCase`, `Sort` and
+`Filter`. `SourceQuery` is the source-package equivalent.
 
 ### Querying several repositories
 

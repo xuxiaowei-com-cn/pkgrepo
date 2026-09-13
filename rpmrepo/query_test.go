@@ -56,11 +56,22 @@ func TestQueryMatchArch(t *testing.T) {
 		query Query
 		want  int
 	}{
-		{Query{Arch: "x86_64"}, 2},
-		{Query{Arch: "src"}, 1}, // src also matches the nosrc architecture
-		{Query{Arch: "aarch64"}, 1},
-		{Query{Arch: "*64"}, 3},
-		{Query{Name: "docker-ce", Arch: "x86_64"}, 2},
+		{Query{Arch: []string{"x86_64"}}, 2},
+		{Query{Arch: []string{"src"}}, 1}, // src also matches the nosrc architecture
+		{Query{Arch: []string{"aarch64"}}, 1},
+		{Query{Arch: []string{"*64"}}, 3},
+		{Query{Name: "docker-ce", Arch: []string{"x86_64"}}, 2},
+		// Several architectures are combined with OR.
+		{Query{Arch: []string{"aarch64", "noarch"}}, 2},
+		{Query{Name: "docker-ce", Arch: []string{"x86_64", "src"}}, 3},
+		{Query{Arch: []string{"aarch*", "noarch"}}, 2},
+		{Query{Arch: []string{"aarch64", "x86_64"}}, 3},
+		// An empty list and an empty value mean no architecture restriction.
+		{Query{Arch: []string{}}, 5},
+		{Query{Arch: []string{""}}, 5},
+		{Query{Arch: []string{"", "noarch"}}, 5},
+		{Query{Arch: []string{"noarch"}}, 1},
+		{Query{Arch: []string{"X86_64"}, IgnoreCase: true}, 2},
 	}
 	for _, tc := range cases {
 		if got := countMatches(pkgs, tc.query); got != tc.want {
@@ -76,7 +87,7 @@ func TestQueryMatchVersionAndProvides(t *testing.T) {
 		want  int
 	}{
 		{Query{Name: "docker-ce", Version: "24.0.7"}, 3},
-		{Query{Name: "docker-ce", Version: "24.0.7", Arch: "x86_64"}, 1},
+		{Query{Name: "docker-ce", Version: "24.0.7", Arch: []string{"x86_64"}}, 1},
 		{Query{Name: "docker-ce", Epoch: "3", Release: "1.el7"}, 4},
 		{Query{Name: "docker-ce", Epoch: "1"}, 0},
 		{Query{Provides: "docker-ce"}, 4},

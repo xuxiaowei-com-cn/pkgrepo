@@ -52,7 +52,7 @@ func TestContainerd(t *testing.T) {
 			// the newest by descending version.
 			amd64 := findContainerd(t, ctx, repository, Query{
 				Name: containerdPackage,
-				Arch: repo.arch,
+				Arch: []string{repo.arch},
 			})
 			t.Logf("newest %s package: %s", repo.arch, amd64[0].DownloadURL)
 			if amd64[0].ID() != latest.ID() {
@@ -113,7 +113,7 @@ func findLatestContainerd(t *testing.T, ctx context.Context, repository *Reposit
 	t.Helper()
 	pkg, err := repository.FindPackage(ctx, Query{
 		Name:   containerdPackage,
-		Arch:   repository.Architectures[0],
+		Arch:   []string{repository.Architectures[0]},
 		Latest: true,
 	})
 	if err != nil {

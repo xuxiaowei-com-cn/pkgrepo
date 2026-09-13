@@ -77,7 +77,7 @@ func main() {
 	// 3. 更精细的条件：架构、版本、能力（Provides）、自定义过滤
 	x86, err := rpmrepo.FindPackages(ctx, repoURL, rpmrepo.Query{
 		Name:   "docker-ce",
-		Arch:   "x86_64",
+		Arch:   []string{"x86_64"},
 		Latest: true,
 	})
 	if err != nil {
@@ -101,9 +101,9 @@ func main() {
 | `(*Repository).FindPackages(ctx, Query)` | 在已打开的仓库上查询 |
 | `rpmrepo.CompareVersions(a, b)` | RPM 版本比较（rpmvercmp），与 rpm/dnf 结果一致 |
 
-`Query` 支持：`Name`（通配符）、`Arch`（`src` 同时匹配 `nosrc`）、`Provides`（按能力查找）、
-`Epoch`/`Version`/`Release`（精确锁定）、`Latest`（每个 名称+架构 只保留最新）、
-`Limit`、`IgnoreCase`、`Sort`、`Filter`（自定义过滤函数）。
+`Query` 支持：`Name`（通配符）、`Arch`（架构数组，支持通配符，`src` 同时匹配 `nosrc`）、
+`Provides`（按能力查找）、`Epoch`/`Version`/`Release`（精确锁定）、`Latest`
+（每个 名称+架构 只保留最新）、`Limit`、`IgnoreCase`、`Sort`、`Filter`（自定义过滤函数）。
 
 ### 一次查询多个仓库（rpmrepo）
 
@@ -262,9 +262,10 @@ func main() {
 此外还有 `WithTimeout`、`WithHTTPClient`、`WithUserAgent`、`WithFetcher`、
 `WithChecksumVerification`、`WithByHashFirst`。
 
-`Query` 支持：`Name`（通配符）、`Arch`、`Component`、`Version`（精确匹配）、`Provides`
-（按虚拟包查找）、`Section`、`Priority`、`Essential`、`Latest`（每个 名称+架构+组件 只保留最新）、
-`Limit`、`IgnoreCase`、`Sort`、`Filter`；源码包使用对应的 `SourceQuery`。
+`Query` 支持：`Name`（通配符）、`Arch`（架构数组，支持通配符，`any` 表示不限架构）、
+`Component`、`Version`（精确匹配）、`Provides`（按虚拟包查找）、`Section`、`Priority`、
+`Essential`、`Latest`（每个 名称+架构+组件 只保留最新）、`Limit`、`IgnoreCase`、`Sort`、
+`Filter`；源码包使用对应的 `SourceQuery`。
 
 ### 一次查询多个仓库（debrepo）
 

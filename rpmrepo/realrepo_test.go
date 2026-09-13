@@ -340,7 +340,7 @@ func TestRealReposListPackages(t *testing.T) {
 	for _, repo := range realRepos() {
 		t.Run(repo.name, func(t *testing.T) {
 			repository := openRealRepo(t, repo)
-			pkgs := findRealPackages(t, repository, Query{Name: realRepoPackage, Arch: "x86_64"})
+			pkgs := findRealPackages(t, repository, Query{Name: realRepoPackage, Arch: []string{"x86_64"}})
 			if len(pkgs) < repo.minPackages {
 				t.Fatalf("the docker-ce package count is %d, fewer than the expected %d; the repository metadata may be unusual", len(pkgs), repo.minPackages)
 			}
@@ -496,7 +496,7 @@ func TestRealReposDownloadURLIsReachable(t *testing.T) {
 		t.Run(repo.name, func(t *testing.T) {
 			ctx := context.Background()
 			repository := openRealRepo(t, repo)
-			latest, err := repository.FindPackage(ctx, Query{Name: realRepoPackage, Arch: "x86_64"})
+			latest, err := repository.FindPackage(ctx, Query{Name: realRepoPackage, Arch: []string{"x86_64"}})
 			if err != nil {
 				t.Fatalf("FindPackage failed: %v", err)
 			}
@@ -536,7 +536,7 @@ func TestRealReposPackageChecksum(t *testing.T) {
 		t.Run(repo.name, func(t *testing.T) {
 			ctx := context.Background()
 			repository := openRealRepo(t, repo)
-			latest, err := repository.FindPackage(ctx, Query{Name: realRepoPackage, Arch: "x86_64"})
+			latest, err := repository.FindPackage(ctx, Query{Name: realRepoPackage, Arch: []string{"x86_64"}})
 			if err != nil {
 				t.Fatalf("FindPackage failed: %v", err)
 			}

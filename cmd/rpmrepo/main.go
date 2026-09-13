@@ -62,7 +62,7 @@ Several repository URLs can be given; every repository is read and the results a
 single list (sorting, -latest, and -limit then apply to the merged list).
 
 Options (packages):
-  -arch string      restrict the architecture, for example x86_64, noarch, or src
+  -arch string      architectures, comma separated, for example x86_64, noarch, or src
   -version string   restrict the version number
   -latest           keep only the newest version of every name+architecture
   -limit int        maximum number of packages to output
@@ -102,6 +102,17 @@ func looksLikeRepository(arg string) bool {
 	return err == nil && info.IsDir()
 }
 
+// splitFlag splits a comma-separated flag value, ignoring blanks, for example "x86_64,noarch".
+func splitFlag(value string) []string {
+	var items []string
+	for _, part := range strings.Split(value, ",") {
+		if trimmed := strings.TrimSpace(part); trimmed != "" {
+			items = append(items, trimmed)
+		}
+	}
+	return items
+}
+
 func runPackages(args []string) error {
 	flags := flag.NewFlagSet("packages", flag.ContinueOnError)
 	arch := flags.String("arch", "", "restrict the architecture")
@@ -131,7 +142,7 @@ func runPackages(args []string) error {
 	}
 	query := rpmrepo.Query{
 		Name:    name,
-		Arch:    *arch,
+		Arch:    splitFlag(*arch),
 		Version: *version,
 		Latest:  *latest,
 		Limit:   *limit,
